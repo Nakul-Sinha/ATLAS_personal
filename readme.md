@@ -2,7 +2,7 @@
 
 > **A**utonomous **T**ask **L**earning & **A**ction **S**ystem
 
-A full-stack AI agent that sees your screen, understands your intent, and takes action — across desktop apps, browsers, and mobile.
+A full-stack AI agent that sees your screen, understands your intent, and takes action , across desktop apps, browsers, and mobile.
 
 ---
 
@@ -40,7 +40,7 @@ A full-stack AI agent that sees your screen, understands your intent, and takes 
 
 ```
 ATLAS/
-├── ml/                  # ML Pipeline v1 — Vision-driven desktop agent
+├── ml/                  # ML Pipeline v1 , Vision-driven desktop agent
 │   ├── config/          #   Pydantic configuration management
 │   ├── models/          #   OCR, VLM (LLaVA), LLM (Mistral/Phi) wrappers
 │   ├── perception/      #   Screen capture, bbox fusion, perception engine
@@ -50,7 +50,7 @@ ATLAS/
 │   ├── mcp/             #   MCP Browser Agent (see below)
 │   └── main.py          #   CLI entry point
 │
-├── ml_2/                # ML Pipeline v2 — Enhanced vision agent
+├── ml_2/                # ML Pipeline v2 , Enhanced vision agent
 │   ├── config/          #   Updated configuration
 │   ├── models/          #   Refined OCR, VLM, LLM model wrappers
 │   ├── perception/      #   Improved screen capture + bbox fusion
@@ -60,22 +60,22 @@ ATLAS/
 │   ├── test_*.py        #   Phased test suites (unit → integration → e2e)
 │   └── main.py          #   CLI entry point
 │
-├── ml/mcp/              # MCP Browser Agent — Autonomous web automation
+├── ml/mcp/              # MCP Browser Agent , Autonomous web automation
 │   ├── browser_agent.py #   Playwright MCP + LLM action loop
 │   ├── llm_backend.py   #   Multi-backend LLM (Gemini / OpenAI / llama.cpp)
 │   ├── config.py        #   Pydantic config with .env support
 │   └── __main__.py      #   CLI entry point (interactive + single-task)
 │
-├── backend/             # WebSocket Backend — Agent orchestration server
+├── backend/             # WebSocket Backend , Agent orchestration server
 │   ├── server.py        #   FastAPI app with REST + WebSocket endpoints
 │   └── test_*.py        #   Connection and command tests
 │
-├── frontend/            # Desktop Launcher — Tauri v2 + Next.js 16
+├── frontend/            # Desktop Launcher , Tauri v2 + Next.js 16
 │   ├── src/app/         #   Next.js pages (search UI, file/app indexer)
 │   ├── src-tauri/       #   Rust backend (file scanning, global shortcut)
 │   └── public/          #   Static assets (owl mascot, logos, SVGs)
 │
-├── companion-app/       # Mobile Companion — Flutter cross-platform app
+├── companion-app/       # Mobile Companion , Flutter cross-platform app
 │   └── companion_app/
 │       ├── lib/main.dart          #  Home screen with voice + text input
 │       ├── lib/services/          #  AtlasService (WebSocket client)
@@ -90,7 +90,7 @@ ATLAS/
 
 ### 1. ML Pipeline (`ml/` · `ml_2/`)
 
-The core vision-driven desktop agent. Operates any desktop application using **only screen pixels** — no APIs, no hooks, no accessibility trees.
+The core vision-driven desktop agent. Operates any desktop application using **only screen pixels** , no APIs, no hooks, no accessibility trees.
 
 **Core Loop:**
 ```
@@ -141,7 +141,7 @@ The core vision-driven desktop agent. Operates any desktop application using **o
 
 ### 1. ML Pipeline (`ml/` · `ml_2/`)
 
-The core vision-driven desktop agent. Operates any desktop application using **only screen pixels** — no APIs, no hooks, no accessibility trees.
+The core vision-driven desktop agent. Operates any desktop application using **only screen pixels** , no APIs, no hooks, no accessibility trees.
 
 **Core Loop:**
 ```
@@ -184,7 +184,7 @@ python main.py --interactive
 Autonomous browser automation powered by **Playwright MCP** and an LLM-driven action loop. Connects to the user's real Chrome profile (cookies & sessions intact) and executes web tasks end-to-end.
 
 **Supported LLM Backends:**
--  **Gemini API** (Google — primary, `gemini-2.0-flash`)
+-  **Gemini API** (Google , primary, `gemini-2.0-flash`)
 -  **OpenAI-compatible** (OpenAI, Groq, Together, local vLLM/Ollama)
 -  **Local llama.cpp** (fully offline, GGUF models)
 
@@ -244,22 +244,22 @@ python server.py              # Runs on http://0.0.0.0:8000
 
 ---
 
-### 4. Frontend — Desktop Launcher (`frontend/`)
+### 4. Frontend , Desktop Launcher (`frontend/`)
 
 A **Tauri v2** desktop app with a **Next.js 16** frontend. Acts as a Spotlight/Alfred-style launcher that indexes and searches your local files and applications.
 
 **Features:**
 -  **Global shortcut** (`Win + -`) to toggle the launcher overlay
--  **File & app indexing** — Scans Start Menu, Desktop, Downloads, Documents, Pictures, Videos, and Program Files
--  **Startup caching** — Indexes once at launch, serves from memory
--  **Glassmorphism UI** — Dark theme with backdrop blur and fade-in animations
--  **Keyboard navigation** — Arrow keys, Enter to open, Escape to dismiss
--  **Transparent, borderless window** — Always-on-top, skip taskbar
+-  **File & app indexing** , Scans Start Menu, Desktop, Downloads, Documents, Pictures, Videos, and Program Files
+-  **Startup caching** , Indexes once at launch, serves from memory
+-  **Glassmorphism UI** , Dark theme with backdrop blur and fade-in animations
+-  **Keyboard navigation** , Arrow keys, Enter to open, Escape to dismiss
+-  **Transparent, borderless window** , Always-on-top, skip taskbar
 
 **Tech Stack:**
-- Rust (Tauri v2) — file scanning, system shortcuts, window management
-- Next.js 16 (Turbopack) — React UI with Tailwind CSS v4
-- Framer Motion — animations
+- Rust (Tauri v2) , file scanning, system shortcuts, window management
+- Next.js 16 (Turbopack) , React UI with Tailwind CSS v4
+- Framer Motion , animations
 
 **Quick Start:**
 ```bash
@@ -276,11 +276,11 @@ npm run tauri:build         # Production build
 A **Flutter** mobile app that connects to the ATLAS backend over your local network. Send voice or text commands from your phone and watch the agent execute tasks on your PC in real-time.
 
 **Features:**
--  **Voice input** — Speech-to-text for hands-free commands
--  **Real-time progress feed** — Live streaming of agent actions
--  **Auto-discovery** — Connect via IP + port with health check verification
--  **Persistent settings** — Remembers server connection details
--  **Pixel-art themed UI** — Custom owl mascot with retro aesthetics
+-  **Voice input** , Speech-to-text for hands-free commands
+-  **Real-time progress feed** , Live streaming of agent actions
+-  **Auto-discovery** , Connect via IP + port with health check verification
+-  **Persistent settings** , Remembers server connection details
+-  **Pixel-art themed UI** , Custom owl mascot with retro aesthetics
 
 **Tech Stack:**
 - Flutter/Dart
@@ -299,12 +299,12 @@ flutter run                   # Run on connected device/emulator
 
 ##  Design Principles
 
-1. **The screen is the only truth** — No reliance on app-specific APIs or hooks
-2. **Never trust one perception pass** — Cross-validate with multiple models
-3. **Never assume a click worked** — Always verify visually
-4. **Never hardcode coordinates** — Adapt to any resolution or DPI
-5. **Always verify visually** — Before and after every action
-6. **Never blindly trust user input** — Prompts may contain adversarial instructions
+1. **The screen is the only truth** , No reliance on app-specific APIs or hooks
+2. **Never trust one perception pass** , Cross-validate with multiple models
+3. **Never assume a click worked** , Always verify visually
+4. **Never hardcode coordinates** , Adapt to any resolution or DPI
+5. **Always verify visually** , Before and after every action
+6. **Never blindly trust user input** , Prompts may contain adversarial instructions
 
 ---
 
