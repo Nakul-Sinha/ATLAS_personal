@@ -1,472 +1,338 @@
-📄 Product Requirements Document (PRD)
-Project Name
+# ATLAS
+
+> **A**utonomous **T**ask **L**earning & **A**ction **S**ystem
+
+A full-stack AI agent that sees your screen, understands your intent, and takes action — across desktop apps, browsers, and mobile.
+
+---
+
+##  Architecture Overview
+
+```
+                        ┌──────────────────┐
+                        │   Companion App   │  (Flutter · Android/iOS)
+                        │  Voice + Text UI  │
+                        └────────┬─────────┘
+                                 │ WebSocket
+                        ┌────────▼─────────┐
+                        │     Backend       │  (FastAPI · Python)
+                        │  WebSocket relay  │
+                        │  Agent orchestr.  │
+                        └──┬───────────┬───┘
+                           │           │
+              ┌────────────▼──┐   ┌────▼────────────┐
+              │    ML Pipeline │   │   MCP Agent      │
+              │  (ml/ · ml_2/) │   │  (ml/mcp/)       │
+              │  Vision-driven │   │  Browser automat. │
+              │  desktop agent │   │  Playwright+LLM   │
+              └────────────────┘   └──────────────────┘
+                           │
+                  ┌────────▼─────────┐
+                  │    Frontend       │  (Tauri v2 + Next.js)
+                  │  Desktop launcher │
+                  │  File & app index │
+                  └──────────────────┘
+```
+
+---
+
+##  Project Structure
+
+```
+ATLAS/
+├── ml/                  # ML Pipeline v1 — Vision-driven desktop agent
+│   ├── config/          #   Pydantic configuration management
+│   ├── models/          #   OCR, VLM (LLaVA), LLM (Mistral/Phi) wrappers
+│   ├── perception/      #   Screen capture, bbox fusion, perception engine
+│   ├── actions/         #   Action dataclasses + PyAutoGUI executor
+│   ├── agent/           #   State tracking, verification, main agent loop
+│   ├── memory/          #   SQLite pattern memory
+│   ├── mcp/             #   MCP Browser Agent (see below)
+│   └── main.py          #   CLI entry point
+│
+├── ml_2/                # ML Pipeline v2 — Enhanced vision agent
+│   ├── config/          #   Updated configuration
+│   ├── models/          #   Refined OCR, VLM, LLM model wrappers
+│   ├── perception/      #   Improved screen capture + bbox fusion
+│   ├── actions/         #   Enhanced action execution
+│   ├── agent/           #   Improved agent loop with better verification
+│   ├── memory/          #   Pattern memory storage
+│   ├── test_*.py        #   Phased test suites (unit → integration → e2e)
+│   └── main.py          #   CLI entry point
+│
+├── ml/mcp/              # MCP Browser Agent — Autonomous web automation
+│   ├── browser_agent.py #   Playwright MCP + LLM action loop
+│   ├── llm_backend.py   #   Multi-backend LLM (Gemini / OpenAI / llama.cpp)
+│   ├── config.py        #   Pydantic config with .env support
+│   └── __main__.py      #   CLI entry point (interactive + single-task)
+│
+├── backend/             # WebSocket Backend — Agent orchestration server
+│   ├── server.py        #   FastAPI app with REST + WebSocket endpoints
+│   └── test_*.py        #   Connection and command tests
+│
+├── frontend/            # Desktop Launcher — Tauri v2 + Next.js 16
+│   ├── src/app/         #   Next.js pages (search UI, file/app indexer)
+│   ├── src-tauri/       #   Rust backend (file scanning, global shortcut)
+│   └── public/          #   Static assets (owl mascot, logos, SVGs)
+│
+├── companion-app/       # Mobile Companion — Flutter cross-platform app
+│   └── companion_app/
+│       ├── lib/main.dart          #  Home screen with voice + text input
+│       ├── lib/services/          #  AtlasService (WebSocket client)
+│       └── lib/screens/           #  Connection settings screen
+│
+└── architecture.md      # Detailed architecture documentation
+```
+
+---
+
+##  Components
+
+### 1. ML Pipeline (`ml/` · `ml_2/`)
+
+The core vision-driven desktop agent. Operates any desktop application using **only screen pixels** — no APIs, no hooks, no accessibility trees.
+
+**Core Loop:**
+```
+                        ┌──────────────────┐
+                        │   Companion App   │  (Flutter · Android/iOS)
+                        │  Voice + Text UI  │
+                        └────────┬─────────┘
+                                 │ WebSocket
+                        ┌────────▼─────────┐
+                        │     Backend       │  (FastAPI · Python)
+                        │  WebSocket relay  │
+                        │  Agent orchestr.  │
+                        └──┬───────────┬───┘
+                           │           │
+              ┌────────────▼──┐   ┌────▼────────────┐
+              │    ML Pipeline │   │   MCP Agent      │
+              │  (ml/ · ml_2/) │   │  (ml/mcp/)       │
+              │  Vision-driven │   │  Browser automat. │
+              │  desktop agent │   │  Playwright+LLM   │
+              └────────────────┘   └──────────────────┘
+                           │
+                  ┌────────▼─────────┐
+                  │    Frontend       │  (Tauri v2 + Next.js)
+                  │  Desktop launcher │
+                  │  File & app index │
+                  └──────────────────┘
+```
+
+**Pipeline Steps:**
+
+| Step | Module | Description |
+|------|--------|-------------|
+| 1 | `llm_model.extract_intent()` | Parse user prompt → structured intent |
+| 2 | `llm_model.create_task_plan()` | Break intent → abstract step list |
+| 3 | `screen_capture.grab()` | Capture screenshot via `mss` |
+| 4 | `ocr_model.detect()` | Extract text + bounding boxes (PaddleOCR) |
+| 5 | `vlm_model.detect_ui_elements()` | Identify UI regions (LLaVA) |
+| 6 | `bbox_fusion.fuse()` | Merge all detections |
+| 7 | `llm_model.plan_action()` | Decide one atomic action |
+| 8 | `agent_loop._resolve_action()` | Convert to pixel coordinates |
+| 9 | `executor.execute()` | Perform OS-level input (PyAutoGUI) |
+| 10 | `verifier.verify()` | Confirm action effect visually |
+
+
+---
+
+## 🧩 Components
+
+### 1. ML Pipeline (`ml/` · `ml_2/`)
+
+The core vision-driven desktop agent. Operates any desktop application using **only screen pixels** — no APIs, no hooks, no accessibility trees.
+
+**Core Loop:**
+```
+PERCEIVE → UNDERSTAND → PLAN → ACT → VERIFY → (repeat)
+```
+
+**Pipeline Steps:**
+
+| Step | Module | Description |
+|------|--------|-------------|
+| 1 | `llm_model.extract_intent()` | Parse user prompt → structured intent |
+| 2 | `llm_model.create_task_plan()` | Break intent → abstract step list |
+| 3 | `screen_capture.grab()` | Capture screenshot via `mss` |
+| 4 | `ocr_model.detect()` | Extract text + bounding boxes (PaddleOCR) |
+| 5 | `vlm_model.detect_ui_elements()` | Identify UI regions (LLaVA) |
+| 6 | `bbox_fusion.fuse()` | Merge all detections |
+| 7 | `llm_model.plan_action()` | Decide one atomic action |
+| 8 | `agent_loop._resolve_action()` | Convert to pixel coordinates |
+| 9 | `executor.execute()` | Perform OS-level input (PyAutoGUI) |
+| 10 | `verifier.verify()` | Confirm action effect visually |
+
+**`ml_2/`** is the enhanced v2 pipeline with improved model wrappers, better verification logic, UIA (UI Automation) support, and a comprehensive phased test suite.
+
+**Quick Start:**
+```bash
+cd ml_2
+pip install -r requirements.txt
+
+# Single command
+python main.py "Open Notepad and type hello"
+
+# Interactive mode
+python main.py --interactive
+```
+
+---
+
+### 2. MCP Browser Agent (`ml/mcp/`)
+
+Autonomous browser automation powered by **Playwright MCP** and an LLM-driven action loop. Connects to the user's real Chrome profile (cookies & sessions intact) and executes web tasks end-to-end.
+
+**Supported LLM Backends:**
+-  **Gemini API** (Google — primary, `gemini-2.0-flash`)
+-  **OpenAI-compatible** (OpenAI, Groq, Together, local vLLM/Ollama)
+-  **Local llama.cpp** (fully offline, GGUF models)
+
+**How it works:**
+1. Launches Chrome with remote debugging (CDP)
+2. Starts a Playwright MCP server connected via `--cdp-endpoint`
+3. Discovers available browser tools from MCP
+4. Feeds tools + task to the LLM in an agentic loop
+5. LLM calls tools → MCP executes in browser → results feed back → repeat
+
+**Quick Start:**
+```bash
+cd ml/mcp
+cp .env.example .env        # Configure your API keys
+pip install -r requirements.txt
+
+# Single task
+python -m mcp "Go to google.com and search for ATLAS AI"
+
+# Interactive REPL
+python -m mcp
+```
+
+---
+
+### 3. Backend (`backend/`)
+
+A **FastAPI** WebSocket server that bridges the companion app to the ML agent. Provides real-time bidirectional communication for sending commands and streaming progress updates.
+
+**Endpoints:**
+
+| Endpoint | Type | Description |
+|----------|------|-------------|
+| `GET /health` | REST | Health check |
+| `GET /status` | REST | Agent status (idle/running) |
+| `GET /companion` | REST | Server identity for companion handshake |
+| `WS /ws` | WebSocket | Bidirectional command + progress stream |
+
+**WebSocket Protocol:**
+```json
+// Client → Server
+{"type": "command", "command": "Open Notepad and type hello"}
+{"type": "stop"}
+
+// Server → Client
+{"type": "progress", "step": "action", "status": "executing", "detail": "..."}
+{"type": "result", "success": true, "detail": "..."}
+{"type": "error", "message": "..."}
+```
 
-ATLAS (Working Title)
-A Vision-Driven Autonomous Desktop Agent using Local AI Models
+**Quick Start:**
+```bash
+cd backend
+pip install -r requirements.txt
+python server.py              # Runs on http://0.0.0.0:8000
+```
 
-1. Overview
-   1.1 Problem Statement
+---
 
-Current automation tools rely on:
+### 4. Frontend — Desktop Launcher (`frontend/`)
 
-brittle scripts
+A **Tauri v2** desktop app with a **Next.js 16** frontend. Acts as a Spotlight/Alfred-style launcher that indexes and searches your local files and applications.
 
-APIs and app-specific hooks
+**Features:**
+-  **Global shortcut** (`Win + -`) to toggle the launcher overlay
+-  **File & app indexing** — Scans Start Menu, Desktop, Downloads, Documents, Pictures, Videos, and Program Files
+-  **Startup caching** — Indexes once at launch, serves from memory
+-  **Glassmorphism UI** — Dark theme with backdrop blur and fade-in animations
+-  **Keyboard navigation** — Arrow keys, Enter to open, Escape to dismiss
+-  **Transparent, borderless window** — Always-on-top, skip taskbar
 
-browser extensions
+**Tech Stack:**
+- Rust (Tauri v2) — file scanning, system shortcuts, window management
+- Next.js 16 (Turbopack) — React UI with Tailwind CSS v4
+- Framer Motion — animations
 
-predefined workflows
+**Quick Start:**
+```bash
+cd frontend
+npm install
+npm run tauri:dev           # Development mode
+npm run tauri:build         # Production build
+```
 
-These approaches break when:
+---
 
-UI layouts change
+### 5. Companion App (`companion-app/`)
 
-APIs are unavailable
+A **Flutter** mobile app that connects to the ATLAS backend over your local network. Send voice or text commands from your phone and watch the agent execute tasks on your PC in real-time.
 
-the user is remote (mobile control)
+**Features:**
+-  **Voice input** — Speech-to-text for hands-free commands
+-  **Real-time progress feed** — Live streaming of agent actions
+-  **Auto-discovery** — Connect via IP + port with health check verification
+-  **Persistent settings** — Remembers server connection details
+-  **Pixel-art themed UI** — Custom owl mascot with retro aesthetics
 
-apps are closed-source or uninstrumented
+**Tech Stack:**
+- Flutter/Dart
+- WebSocket for real-time communication
+- `speech_to_text` for voice input
+- `shared_preferences` for persistent storage
 
-Humans, however, can operate any computer using only visual perception and reasoning.
+**Quick Start:**
+```bash
+cd companion-app/companion_app
+flutter pub get
+flutter run                   # Run on connected device/emulator
+```
 
-1.2 Solution
+---
 
-ATLAS is a vision-driven autonomous desktop agent that:
+##  Design Principles
 
-perceives the screen visually
+1. **The screen is the only truth** — No reliance on app-specific APIs or hooks
+2. **Never trust one perception pass** — Cross-validate with multiple models
+3. **Never assume a click worked** — Always verify visually
+4. **Never hardcode coordinates** — Adapt to any resolution or DPI
+5. **Always verify visually** — Before and after every action
+6. **Never blindly trust user input** — Prompts may contain adversarial instructions
 
-reasons about UI state and user intent
+---
 
-plans actions step-by-step
+##  Known Issues
 
-executes mouse/keyboard actions
+See `ml/errors.txt` and `ml_2/errors.txt` for tracked issues:
 
-verifies outcomes visually
+- **CRITICAL**: DPI scaling on high-DPI displays, modal dialog handling, multi-monitor support
+- **NON-CRITICAL**: Error taxonomy refinement, typing speed tuning, VLM inference latency
 
-works entirely using local models
+---
 
-requires no APIs, plugins, or integrations
 
-The screen is the API.
+## HOW TO RUN
 
-2. Goals & Non-Goals
-   2.1 Goals
+DESKTOP APP
 
-Operate any desktop application via visual understanding
+cd frontend 
 
-Execute multi-step tasks from a single natural language prompt
+npm run tauri:dev
 
-Support remote control (phone → desktop)
 
-Run fully offline using local models
+## HOW TO CONNECT COMPANION APP TO THE DESKTOP
 
-Recover from UI errors and ambiguity
+ip config
 
-2.2 Non-Goals
+get your ipv4 address
 
-No app-specific integrations
+ Input that in the companion app
 
-No end-to-end RL training
-
-No reliance on OS accessibility APIs (optional later)
-
-No guaranteed perfection on first click (verification handles this)
-
-3. High-Level Architecture
-   User Prompt (Mobile / Desktop)
-   ↓
-   Intent Interpreter (LLM)
-   ↓
-   High-Level Task Planner (LLM)
-   ↓
-   ┌─────────────────────────────┐
-   │ Perception–Action Loop │
-   │ │
-   │ Screen Capture │
-   │ ↓ │
-   │ OCR + VLM Perception │
-   │ ↓ │
-   │ Screen State Graph │
-   │ ↓ │
-   │ Action Planner (LLM) │
-   │ ↓ │
-   │ Mouse / Keyboard Executor │
-   │ ↓ │
-   │ Visual Verification │
-   │ ↺ (loop) │
-   └─────────────────────────────┘
-   ↓
-   Task Completion / Failure
-
-4. Core User Stories
-   4.1 Example 1
-
-“Open Spotify, search song ABC, and add it to my playlist.”
-
-4.2 Example 2
-
-“Open file manager, find report.pdf, and send it to Aarav on WhatsApp.”
-
-4.3 Example 3
-
-“Find the research paper I opened last Tuesday and email a summary.”
-
-5. ML Stack (Local Models Only)
-   5.1 OCR (Text + Bounding Boxes)
-
-Recommended
-
-PaddleOCR (best balance of accuracy + speed)
-
-Supports:
-
-text detection
-
-text recognition
-
-bounding box polygons
-
-Why
-
-Precise text localization
-
-Stable bounding boxes
-
-Works offline
-
-Mature ecosystem
-
-5.2 Vision-Language Model (UI Understanding)
-
-Primary Choice
-
-LLaVA 1.6 / LLaVA-Next (quantized)
-
-Alternatives
-
-BLIP-2 (lighter, less reasoning)
-
-InternVL (if GPU available)
-
-Role
-
-Identify UI regions (input fields, buttons, icons)
-
-Understand layout and relationships
-
-Provide semantic descriptions of screen regions
-
-Why LLaVA
-
-Strong spatial reasoning
-
-Can consume OCR outputs
-
-Good grounding for UI tasks
-
-Proven in “computer use” agents
-
-5.3 Language Model (Planning & Reasoning)
-
-Primary Choice
-
-Mistral 7B / Mixtral 8x7B (quantized)
-
-Lightweight Option
-
-Phi-3 (for CPU-only setups)
-
-Role
-
-Intent extraction
-
-Task decomposition
-
-Action planning
-
-Candidate ranking
-
-Error recovery
-
-Why
-
-Strong reasoning per parameter
-
-Excellent local inference support
-
-Good tool-use and planning behavior
-
-6. Detailed ML / Agent Pipeline
-   6.1 Step 1: Intent Interpretation (LLM)
-
-Trigger
-
-User submits a prompt
-
-Input
-
-"Open Spotify, search song ABC and add it to playlist"
-
-Output (Structured Intent)
-
-{
-"goal": "music_action",
-"app": "Spotify",
-"actions": [
-{ "type": "search", "query": "ABC" },
-{ "type": "add_to_playlist" }
-]
-}
-
-Notes
-
-No UI assumptions
-
-No coordinates
-
-Pure semantic understanding
-
-6.2 Step 2: High-Level Task Planning (LLM)
-
-Input
-
-Structured intent
-
-Output
-
-1. Ensure Spotify is open
-2. Locate search functionality
-3. Search for song "ABC"
-4. Select correct result
-5. Open options menu
-6. Add song to playlist
-
-This plan is abstract, not UI-specific.
-
-6.3 Step 3: Screen Capture
-
-Trigger
-
-Before every action
-
-Output
-
-Screenshot (RGB image)
-
-Screen resolution (W, H)
-
-This defines the coordinate system for the current loop.
-
-6.4 Step 4: OCR Processing
-
-Input
-
-Screenshot
-
-Output
-
-[
-{
-"text": "Search",
-"bbox": [[120,45],[260,45],[260,75],[120,75]]
-},
-{
-"text": "Your Library",
-"bbox": [...]
-}
-]
-
-Purpose
-
-Provide semantic anchors
-
-Provide pixel-accurate bounding boxes
-
-6.5 Step 5: VLM UI Region Detection
-
-Input
-
-Screenshot
-
-OCR results
-
-Prompt:
-
-“Identify interactive UI regions and their roles.”
-
-Output
-
-[
-{
-"type": "input_field",
-"bbox": [95, 40, 620, 92],
-"confidence": 0.87
-},
-{
-"type": "button",
-"bbox": [...],
-"label": "Play"
-}
-]
-
-6.6 Step 6: Bounding Box Fusion Logic
-Sources of Bounding Boxes
-
-OCR text boxes
-
-VLM UI region boxes
-
-Geometry-based rectangles (heuristics)
-
-Fusion Steps
-
-Normalize all boxes → relative coordinates
-
-Expand OCR boxes into functional regions
-
-Merge overlapping boxes (IoU threshold)
-
-Assign semantic roles using LLM reasoning
-
-Result
-
-{
-"role": "search_bar",
-"bbox_norm": [0.05, 0.04, 0.32, 0.08],
-"confidence": 0.92
-}
-
-6.7 Step 7: Action Planning (LLM)
-
-Input
-
-Current screen state graph
-
-Next abstract task step
-
-Output
-
-{
-"action": "click",
-"target_role": "search_bar"
-}
-
-6.8 Step 8: Coordinate Resolution
-
-Convert
-
-x = x_norm _ screen_width
-y = y_norm _ screen_height
-
-Apply DPI scaling calibration if needed
-
-6.9 Step 9: Action Execution
-
-Actions Supported
-
-mouse_move(x, y)
-
-mouse_click()
-
-type(text)
-
-key_press(key)
-
-Executor
-
-OS-level input injection
-
-No app hooks
-
-6.10 Step 10: Visual Verification Loop
-
-After every action
-
-Check:
-
-Did the expected UI change occur?
-
-Did cursor appear?
-
-Did text render?
-
-Did results update?
-
-If yes
-
-Advance to next step
-
-If no
-
-Re-run perception
-
-Try next ranked candidate
-
-Re-plan if needed
-
-This is closed-loop control.
-
-7. Learning & Memory (Non-Training)
-   7.1 Experience Memory
-
-Store:
-
-successful UI patterns
-
-element locations (relative)
-
-common failures
-
-Used for:
-
-speed
-
-ranking
-
-confidence
-
-No gradient updates.
-
-8. Performance Requirements
-
-Perception loop: ≤ 500 ms
-
-Action latency: ≤ 100 ms
-
-FPS target: 2–5 (sufficient for UI)
-
-GPU optional, CPU fallback supported
-
-9. Risks & Mitigations
-   Risk Mitigation
-   UI ambiguity Candidate ranking + verification
-   Layout changes Re-perception every step
-   DPI mismatch Runtime calibration
-   OCR failure VLM fallback
-   Wrong click Verification + retry
-10. MVP Scope (Hackathon-Ready)
-    Supported Tasks
-
-App launching
-
-Search & text input
-
-File navigation
-
-Media playback actions
-
-Messaging attachment sending
-
-Out of Scope (MVP)
-
-Drag-and-drop
-
-Multi-user OS
-
-Complex CAPTCHAs
-
-11. Key Insight (Core Principle)
-
-Training teaches the system how to see.
-Reasoning decides what to do.
-Verification ensures correctness.
+ 
