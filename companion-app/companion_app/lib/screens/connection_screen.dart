@@ -9,6 +9,7 @@ import '../services/discovery_service.dart';
 /// Shared with the startup flow in main.dart.
 const String kAtlasHostKey = 'atlas_host';
 const String kAtlasPortKey = 'atlas_port';
+const String kAtlasTokenKey = 'atlas_token';
 const int kAtlasDefaultPort = 8000;
 
 /// Lets the user enter the ATLAS backend host and port, verifies reachability
@@ -27,6 +28,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   final TextEditingController _hostController = TextEditingController();
   final TextEditingController _portController =
       TextEditingController(text: '$kAtlasDefaultPort');
+  final TextEditingController _tokenController = TextEditingController();
 
   bool _checking = false;
   String? _statusMessage;
@@ -50,10 +52,12 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     final prefs = await SharedPreferences.getInstance();
     final host = prefs.getString(kAtlasHostKey) ?? '';
     final port = prefs.getInt(kAtlasPortKey) ?? kAtlasDefaultPort;
+    final token = prefs.getString(kAtlasTokenKey) ?? '';
     if (!mounted) return;
     setState(() {
       _hostController.text = host;
       _portController.text = '$port';
+      _tokenController.text = token;
     });
   }
 
@@ -62,6 +66,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
     _discovery.cancel();
     _hostController.dispose();
     _portController.dispose();
+    _tokenController.dispose();
     super.dispose();
   }
 
@@ -123,6 +128,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
   Future<void> _connect() async {
     final host = _hostController.text.trim();
     final portText = _portController.text.trim();
+    final token = _tokenController.text.trim();
 
     if (host.isEmpty) {
       setState(() {
@@ -146,7 +152,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       _lastAttemptOk = false;
     });
 
-    widget.service.configure(host, port);
+    widget.service.configure(host, port, token: token);
     final ok = await widget.service.checkHealth();
     if (!mounted) return;
 
@@ -154,6 +160,7 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(kAtlasHostKey, host);
       await prefs.setInt(kAtlasPortKey, port);
+      await prefs.setString(kAtlasTokenKey, token);
       if (!mounted) return;
       setState(() {
         _checking = false;
@@ -254,11 +261,26 @@ class _ConnectionScreenState extends State<ConnectionScreen> {
                             inputFormatters: <TextInputFormatter>[
                               FilteringTextInputFormatter.digitsOnly,
                             ],
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _connect(),
+                            textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Port',
                               hintText: '8000',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // Optional. Leave blank on an open LAN backend; fill
+                          // it in only when the backend requires auth.
+                          TextField(
+                            controller: _tokenController,
+                            obscureText: true,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _connect(),
+                            decoration: const InputDecoration(
+                              labelText: 'Access token (optional)',
+                              hintText: 'Leave blank for an open network',
                               border: OutlineInputBorder(),
                             ),
                           ),

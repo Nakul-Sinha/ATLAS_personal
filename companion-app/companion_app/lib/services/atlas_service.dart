@@ -20,13 +20,18 @@ enum AtlasConnectionState { disconnected, connecting, connected, error }
 /// Extends [ChangeNotifier] so widgets can rebuild via ListenableBuilder or
 /// AnimatedBuilder whenever the connection state or event list changes.
 class AtlasService extends ChangeNotifier {
-  AtlasService({this.host = '', this.port = 8000});
+  AtlasService({this.host = '', this.port = 8000, this.token = ''});
 
   /// Backend host, for example "192.168.1.20". No scheme and no port here.
   String host;
 
   /// Backend port. Defaults to the ATLAS backend default of 8000.
   int port;
+
+  /// Optional access token for backends that require auth. An empty string
+  /// means the backend is open (no auth) and nothing extra is sent. When set,
+  /// it is delivered as the very first frame after the socket opens.
+  String token;
 
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
@@ -58,10 +63,12 @@ class AtlasService extends ChangeNotifier {
 
   // ---- Configuration -----------------------------------------------------
 
-  /// Updates the target host and port. Does not open or close the socket.
-  void configure(String host, int port) {
+  /// Updates the target host, port, and optional auth token. Does not open or
+  /// close the socket. Pass an empty [token] (the default) for an open backend.
+  void configure(String host, int port, {String token = ''}) {
     this.host = host.trim();
     this.port = port;
+    this.token = token.trim();
   }
 
   // ---- Health probe ------------------------------------------------------
@@ -130,6 +137,17 @@ class AtlasService extends ChangeNotifier {
         onDone: _handleDone,
         cancelOnError: false,
       );
+      // When the backend requires auth the token must be the very first frame,
+      // ahead of any command. Buffering it on the sink now guarantees it is
+      // sent first once the handshake completes. An empty token means the
+      // backend is open, so nothing is sent.
+      final authToken = token.trim();
+      if (authToken.isNotEmpty) {
+        channel.sink.add(jsonEncode(<String, dynamic>{
+          'type': 'auth',
+          'token': authToken,
+        }));
+      }
       // ready resolves once the handshake completes, or throws on failure.
       channel.ready.then((_) {
         _setState(AtlasConnectionState.connected);
@@ -154,6 +172,23 @@ class AtlasService extends ChangeNotifier {
     }
     _channel!.sink.add(jsonEncode(<String, dynamic>{
       'type': 'command',
+      'command': trimmed,
+    }));
+  }
+
+  /// Previews a command without executing it, sending
+  /// {"type":"plan","command":...}. The backend replies with a "plan" array
+  /// and a "dry run" detail. Uses the same guards as [sendCommand] and never
+  /// throws.
+  void sendPlan(String command) {
+    final trimmed = command.trim();
+    if (trimmed.isEmpty) return;
+    if (!_canSend) {
+      _pushLocalError('Not connected to ATLAS. Check the connection first.');
+      return;
+    }
+    _channel!.sink.add(jsonEncode(<String, dynamic>{
+      'type': 'plan',
       'command': trimmed,
     }));
   }
