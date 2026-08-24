@@ -240,6 +240,19 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and conventions. CI runs on eve
 push and pull request: backend and ML tests, frontend build and lint, a Tauri
 `cargo check`, and Flutter analyze.
 
+## Releasing
+
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds and publishes
+the backend image to GHCR, the desktop installers (Windows and Linux), and the
+Android APK, attaching them to a draft GitHub Release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 [MIT](LICENSE).
