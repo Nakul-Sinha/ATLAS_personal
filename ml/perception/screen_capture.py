@@ -24,17 +24,28 @@ class ScreenFrame:
     monitor: int
     timestamp: float
     dpi_scale: float = 1.0
-    
+    # Top-left of this monitor in the virtual desktop. pyautogui clicks use
+    # virtual-desktop coordinates, so these offsets must be added when a target
+    # is on a non-primary monitor.
+    offset_x: int = 0
+    offset_y: int = 0
+
     def to_absolute(self, x_norm: float, y_norm: float) -> Tuple[int, int]:
-        """Convert normalized coordinates to absolute pixels."""
-        x = int(x_norm * self.width * self.dpi_scale)
-        y = int(y_norm * self.height * self.dpi_scale)
+        """
+        Convert normalized in-frame coordinates to absolute click coordinates.
+
+        Adds the monitor offset so the result is in the virtual-desktop space
+        that the OS input layer expects. When the process is DPI aware the
+        captured pixels and input pixels share one space and dpi_scale stays 1.0.
+        """
+        x = self.offset_x + int(x_norm * self.width * self.dpi_scale)
+        y = self.offset_y + int(y_norm * self.height * self.dpi_scale)
         return (x, y)
-    
+
     def to_normalized(self, x: int, y: int) -> Tuple[float, float]:
-        """Convert absolute pixels to normalized coordinates."""
-        x_norm = x / (self.width * self.dpi_scale)
-        y_norm = y / (self.height * self.dpi_scale)
+        """Convert absolute (virtual-desktop) pixels to normalized in-frame coordinates."""
+        x_norm = (x - self.offset_x) / (self.width * self.dpi_scale)
+        y_norm = (y - self.offset_y) / (self.height * self.dpi_scale)
         return (x_norm, y_norm)
 
 
@@ -97,7 +108,9 @@ class ScreenCapture:
                 height=mon_info["height"],
                 monitor=mon,
                 timestamp=time.time(),
-                dpi_scale=self.config.dpi_scale
+                dpi_scale=self.config.dpi_scale,
+                offset_x=mon_info.get("left", 0),
+                offset_y=mon_info.get("top", 0),
             )
             
             logger.debug(f"Captured screen: {frame.width}x{frame.height}")
@@ -113,11 +126,41 @@ class ScreenCapture:
             self._init_mss()
         return self._monitor_info[1:]  # Skip the "all monitors" entry
     
+    def set_dpi_awareness(self) -> bool:
+        """
+        Make the process per-monitor DPI aware (Windows).
+
+        This is the robust fix for CRITICAL-001: once the process is DPI aware,
+        mss captures at physical pixels and the OS input layer also uses physical
+        pixels, so captured coordinates and click coordinates share one space and
+        no per-axis scaling correction is needed. Safe no-op off Windows.
+
+        Returns True if awareness was set (or already active), False otherwise.
+        """
+        try:
+            import ctypes
+
+            # PROCESS_PER_MONITOR_DPI_AWARE = 2
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            logger.info("Process set to per-monitor DPI aware")
+            return True
+        except AttributeError:
+            # Not on Windows, or shcore unavailable.
+            return False
+        except OSError as e:
+            # Already set by a manifest or an earlier call; treat as success.
+            logger.debug(f"DPI awareness already configured: {e}")
+            return True
+        except Exception as e:
+            logger.warning(f"Could not set DPI awareness: {e}")
+            return False
+
     def detect_dpi_scale(self) -> float:
         """
-        Detect current DPI scaling.
-        
-        TODO: Implement proper DPI detection (CRITICAL-001)
+        Detect current DPI scaling for reporting and logging.
+
+        Coordinate correctness comes from set_dpi_awareness(); this value is
+        informational (for example, to warn a user about a scaled display).
         """
         try:
             import ctypes

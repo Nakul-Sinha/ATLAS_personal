@@ -4,12 +4,11 @@ ATLAS ML Pipeline - Agent Loop
 Main agent loop: PERCEIVE → UNDERSTAND → PLAN → ACT → VERIFY → repeat
 """
 
-from typing import Optional, List, Dict, Any
 import time
 from loguru import logger
 
 from models import LLMModel
-from perception import PerceptionEngine
+from perception import PerceptionEngine, detect_modal, window_state
 from actions import ActionExecutor, ClickAction, TypeAction, KeyAction, ScrollAction, WaitAction
 from agent.state import AgentState, AgentStatus
 from agent.verification import Verifier
@@ -35,12 +34,21 @@ class AgentLoop:
         self.memory = Memory()
         self.state = AgentState()
         self._initialized = False
-        
+        # The element resolved for the most recent action, used when storing
+        # a success pattern so the correct bbox is recorded.
+        self._last_target = None
+
     def initialize(self) -> None:
         """Initialize all models."""
         if self._initialized:
             return
         logger.info("Initializing agent...")
+        # CRITICAL-001: make the process DPI aware so captured pixels and click
+        # pixels share one coordinate space before any capture happens.
+        self.perception.screen_capture.set_dpi_awareness()
+        detected_scale = self.perception.screen_capture.detect_dpi_scale()
+        if abs(detected_scale - 1.0) > 0.01:
+            logger.info(f"Display DPI scale is {detected_scale:.2f} (process is DPI aware)")
         self.llm.load()
         # Initialize perception (starts with OCR)
         self.perception.initialize_ocr()
@@ -71,7 +79,17 @@ class AgentLoop:
             logger.info(f"Processing: {user_prompt}")
             self.state.intent = self.llm.extract_intent(user_prompt)
             logger.info(f"Intent: {self.state.intent.goal}")
-            
+
+            # CRITICAL-003: if the target app is already open but not focused,
+            # bring it to the front so the screen capture shows the right window.
+            if self.state.intent and self.state.intent.app:
+                try:
+                    if not window_state.is_app_focused(self.state.intent.app):
+                        if window_state.bring_to_front(self.state.intent.app):
+                            logger.info(f"Focused existing window for {self.state.intent.app}")
+                except Exception as e:
+                    logger.debug(f"Window focus pre-check skipped: {e}")
+
             # STEP 2: Create task plan
             self.state.task_steps = self.llm.create_task_plan(self.state.intent)
             if not self.state.task_steps:
@@ -128,7 +146,18 @@ class AgentLoop:
         # VLM detect_ui_elements returns unreliable bboxes and takes ~60s per call.
         # OCR-only path is fast (~5s) and gives accurate text+bbox data.
         self.state.perception = self.perception.quick_perceive()
-        
+
+        # CRITICAL-002: notice a blocking modal dialog before planning an action.
+        try:
+            modal = detect_modal(self.state.perception.frame.image)
+            if modal:
+                logger.warning(
+                    f"Possible modal dialog detected (area {modal['area_ratio']}, "
+                    f"confidence {modal['confidence']}); planning should address it first"
+                )
+        except Exception as e:
+            logger.debug(f"Modal detection skipped: {e}")
+
         # Log detected elements count
         num_elements = len(self.state.perception.fused_elements)
         logger.debug(f"Perceived {num_elements} UI elements")
@@ -217,8 +246,13 @@ class AgentLoop:
                     planned.target_text
                 )
                 if ranked and ranked[0].get("relevance_score", 0) > 0.5:
-                    # Use the top-ranked candidate
-                    target = candidates[0]  # Already sorted by relevance
+                    # Map the top-ranked entry back to its element by bbox, so we
+                    # actually use the element the LLM chose (not the first one).
+                    top = ranked[0]
+                    target = next(
+                        (c for c in candidates if c.to_dict().get("bbox") == top.get("bbox")),
+                        candidates[0],
+                    )
                     logger.debug(f"LLM ranked candidate: {target.text}")
         
         # Debug log result
@@ -227,27 +261,32 @@ class AgentLoop:
         elif planned.target_text or planned.target_role:
             logger.warning(f"Target not found: text='{planned.target_text}', role='{planned.target_role}'")
         
+        # Remember which element we resolved so success patterns store its bbox.
+        self._last_target = target
+
         if planned.action_type == "click":
             if target:
                 cx, cy = target.center
-                x = int(cx * frame.width)
-                y = int(cy * frame.height)
+                # Route through to_absolute so the monitor offset (and any DPI
+                # scale) is applied; fixes off-target clicks on non-primary
+                # monitors (CRITICAL-004).
+                x, y = frame.to_absolute(cx, cy)
                 return ClickAction(x=x, y=y, confidence=planned.confidence)
             logger.error("Click validation failed: No target element found")
             return None
-            
+
         elif planned.action_type == "type":
             return TypeAction(text=planned.text or "", confidence=planned.confidence)
-            
+
         elif planned.action_type == "key":
             return KeyAction(key=planned.key or "", confidence=planned.confidence)
-            
+
         elif planned.action_type == "scroll":
-            x, y = frame.width // 2, frame.height // 2
+            x, y = frame.to_absolute(0.5, 0.5)
             if target:
                 cx, cy = target.center
-                x, y = int(cx * frame.width), int(cy * frame.height)
-            return ScrollAction(x=x, y=y, direction=planned.direction or "down", 
+                x, y = frame.to_absolute(cx, cy)
+            return ScrollAction(x=x, y=y, direction=planned.direction or "down",
                                 confidence=planned.confidence)
         
         elif planned.action_type == "wait":
@@ -324,11 +363,17 @@ class AgentLoop:
                 return
             
             app_name = self.state.intent.app or "unknown"
+            # Record the bbox of the element actually acted on, not an arbitrary
+            # element on screen (CRITICAL / ML-07).
+            if self._last_target is not None:
+                bbox_relative = list(self._last_target.bbox_normalized)
+            else:
+                bbox_relative = [0, 0, 0, 0]
             self.memory.store(PatternRecord(
                 app_name=app_name,
                 element_role=action.target_role or "unknown",
                 element_text=action.target_text,
-                bbox_relative=list(self.state.perception.fused_elements[0].bbox_normalized) if self.state.perception and self.state.perception.fused_elements else [0, 0, 0, 0],
+                bbox_relative=bbox_relative,
                 action_type=action.action_type
             ))
         except Exception as e:

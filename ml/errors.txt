@@ -104,17 +104,19 @@ NON-CRITICAL ISSUES (Pipeline Can Function - Fix for Robustness)
 RESOLUTION TRACKING
 --------------------------------------------------------------------------------
 
-Issue ID        | Status      | Fixed In    | Notes
-----------------|-------------|-------------|--------------------------------
-CRITICAL-001    | OPEN        |             |
-CRITICAL-002    | OPEN        |             |
-CRITICAL-003    | OPEN        |             |
-CRITICAL-004    | OPEN        |             |
-NON-CRIT-001    | OPEN        |             |
-NON-CRIT-002    | OPEN        |             |
-NON-CRIT-003    | OPEN        |             |
-NON-CRIT-004    | OPEN        |             |
-NON-CRIT-005    | OPEN        |             |
-NON-CRIT-006    | OPEN        |             |
+Issue ID        | Status      | Fixed In              | Notes
+----------------|-------------|-----------------------|--------------------------------
+CRITICAL-001    | ADDRESSED   | screen_capture.py     | set_dpi_awareness() at init;
+                |             | agent_loop.py         | clicks routed via to_absolute
+CRITICAL-002    | ADDRESSED   | modal_detection.py    | detect_modal() checked each step
+CRITICAL-003    | ADDRESSED   | window_state.py       | bring_to_front() best-effort
+CRITICAL-004    | ADDRESSED   | screen_capture.py     | monitor offset kept in frame and
+                |             | agent_loop.py         | added in to_absolute()
+NON-CRIT-001    | OPEN        |                       |
+NON-CRIT-002    | OPEN        |                       |
+NON-CRIT-003    | OPEN        |                       |
+NON-CRIT-004    | OPEN        |                       |
+NON-CRIT-005    | OPEN        |                       |
+NON-CRIT-006    | ADDRESSED   | memory/memory.py      | SQLite schema, wired into loop
 
 ================================================================================
