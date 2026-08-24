@@ -148,6 +148,22 @@ ollama pull llava
 
 ---
 
+## Phase 10: Non-Critical Robustness (from errors.txt)
+- [x] NON-CRIT-001: Error classification taxonomy. agent/error_taxonomy.py routes a
+      failure to PERCEPTION / EXECUTION / STATE / TASK and the loop skips infeasible
+      tasks instead of burning retries.
+- [x] NON-CRIT-002: Typing and input buffering. Chunked, unicode-safe typing in the
+      executor avoids dropped keystrokes.
+- [x] NON-CRIT-003: Multi-app context switching. agent/app_context.py focuses the
+      target app and relays copy/paste across apps.
+- [x] NON-CRIT-004: VLM latency. A perceptual-hash cache reuses VLM results on static
+      screens; cross-validation is opt-in via config.vlm.cross_validate.
+- [x] NON-CRIT-005: Icon fallback. perception/icon_match.py detects text-free icons and
+      feeds them into fusion.
+- [x] NON-CRIT-006: Memory persistence (already wired).
+
+---
+
 ## Dependencies Status
 
 | Package | Version | Status | Notes |

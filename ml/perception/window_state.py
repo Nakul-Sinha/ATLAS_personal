@@ -11,6 +11,7 @@ platforms or when the Win32 calls are unavailable.
 
 from __future__ import annotations
 
+import time
 from typing import List, Optional, Tuple
 
 from loguru import logger
@@ -118,4 +119,68 @@ def bring_to_front(app_name: str) -> bool:
         return True
     except Exception as e:
         logger.debug(f"bring_to_front failed for {app_name}: {e}")
+        return False
+
+
+def focus_and_wait(app_name: str, timeout: float = 2.0) -> bool:
+    """
+    Bring a window matching app_name to the front and wait until it actually
+    holds keyboard focus, up to timeout seconds.
+
+    Focus transfers are asynchronous on Windows: SetForegroundWindow returns
+    before the target window is really in front, so a caller that captures the
+    screen or types immediately can hit the wrong window. This polls
+    is_app_focused so a multi-app step (for example "copy from Chrome, paste
+    into Word") does not act until the switch has landed.
+
+    Returns True once the app is confirmed focused within the timeout. Best
+    effort and defensive: returns False off Windows, when no matching window is
+    found, or if focus is not confirmed in time. Never raises.
+    """
+    if not app_name:
+        return False
+    try:
+        # Already in front: nothing to do.
+        if is_app_focused(app_name):
+            return True
+        # Ask the OS to raise the window; bail early if there is nothing to raise.
+        if not bring_to_front(app_name):
+            return False
+        deadline = time.monotonic() + max(0.0, float(timeout))
+        while time.monotonic() < deadline:
+            if is_app_focused(app_name):
+                return True
+            time.sleep(0.05)
+        # One last check in case focus settled right at the deadline boundary.
+        return is_app_focused(app_name)
+    except Exception as e:
+        logger.debug(f"focus_and_wait failed for {app_name}: {e}")
+        return False
+
+
+def switch_to_app(app_name: str, timeout: float = 2.0) -> bool:
+    """
+    Switch desktop focus to another application as part of a multi-app workflow.
+
+    This is a clear, intent-revealing wrapper over bring_to_front: it raises the
+    target window, waits briefly for the OS to transfer focus (via
+    focus_and_wait), and verifies the result with is_app_focused before
+    reporting success. Use it whenever a task step implies moving between apps,
+    such as copying from a browser and pasting into a document.
+
+    Returns True only when the switch is confirmed. Best effort and defensive:
+    returns False off Windows or when the target window cannot be found, and
+    never raises.
+    """
+    if not app_name:
+        return False
+    try:
+        switched = focus_and_wait(app_name, timeout=timeout)
+        if switched:
+            logger.info(f"Switched to app: {app_name}")
+        else:
+            logger.debug(f"Could not confirm focus for app: {app_name}")
+        return switched
+    except Exception as e:
+        logger.debug(f"switch_to_app failed for {app_name}: {e}")
         return False

@@ -10,6 +10,7 @@ Handles visual understanding of screenshots:
 
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass
+from collections import OrderedDict
 import numpy as np
 from PIL import Image
 from loguru import logger
@@ -54,13 +55,28 @@ class VLMModel:
         vlm = VLMModel()
         regions = vlm.detect_ui_elements(screenshot)
         description = vlm.describe_screen(screenshot)
+
+    Latency (NON-CRIT-004):
+        detect_ui_elements() and describe_screen() are cached in memory keyed
+        by a fast perceptual (average) hash of the input image. Identical or
+        near-identical static screens reuse the previous result instead of
+        paying the full VLM round trip again. Caching is controlled by
+        cache_enabled (default True) and bounded by cache_max_size.
     """
-    
-    def __init__(self, vlm_config: Optional[VLMConfig] = None):
+
+    def __init__(self, vlm_config: Optional[VLMConfig] = None,
+                 cache_enabled: bool = True, cache_max_size: int = 128):
         self.config = vlm_config or config.vlm
         self._model = None
         self._processor = None
-        
+
+        # In-memory perceptual-hash cache for VLM results. Keyed by
+        # "<method>:<avg_hash>" so identical or near-identical static screens
+        # do not re-run the slow VLM query. LRU eviction keeps it bounded.
+        self.cache_enabled = cache_enabled
+        self.cache_max_size = max(1, int(cache_max_size))
+        self._cache: "OrderedDict[str, Any]" = OrderedDict()
+
     def load(self) -> None:
         """Initialize the VLM model."""
         if self.config.backend == "ollama":
@@ -72,7 +88,62 @@ class VLMModel:
         # Fallback to transformers (or others) could go here...
         logger.warning(f"Backend {self.config.backend} not fully implemented in load()")
         self._model = None
-            
+
+    # ------------------------------------------------------------------
+    # Perceptual-hash result cache (NON-CRIT-004)
+    # ------------------------------------------------------------------
+    def _perceptual_hash(self, image: np.ndarray, hash_size: int = 8) -> Optional[str]:
+        """
+        Compute a fast average-hash of the image for cache keying.
+
+        The image is downscaled to a small grayscale square and each pixel is
+        compared against the mean. Near-identical static screens produce the
+        same hash. Returns None on any failure so the caller degrades to an
+        uncached (but still correct) code path.
+        """
+        try:
+            pil = Image.fromarray(image).convert("L").resize(
+                (hash_size, hash_size), Image.BILINEAR
+            )
+            arr = np.asarray(pil, dtype=np.float32)
+            avg = float(arr.mean())
+            bits = (arr > avg).flatten()
+            value = 0
+            for bit in bits:
+                value = (value << 1) | int(bit)
+            return format(value, "x")
+        except Exception as e:
+            logger.debug(f"Perceptual hash failed, skipping cache: {e}")
+            return None
+
+    def _cache_key(self, method: str, image: np.ndarray) -> Optional[str]:
+        if not self.cache_enabled:
+            return None
+        h = self._perceptual_hash(image)
+        if h is None:
+            return None
+        return f"{method}:{h}"
+
+    def _cache_get(self, key: Optional[str]) -> Any:
+        if not self.cache_enabled or key is None:
+            return None
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+
+    def _cache_put(self, key: Optional[str], value: Any) -> None:
+        if not self.cache_enabled or key is None:
+            return
+        self._cache[key] = value
+        self._cache.move_to_end(key)
+        while len(self._cache) > self.cache_max_size:
+            self._cache.popitem(last=False)
+
+    def clear_cache(self) -> None:
+        """Drop all cached VLM results (for example after a full screen change)."""
+        self._cache.clear()
+
     def _query(self, image: Image.Image, prompt: str) -> str:
         """Run a query against the VLM."""
         if self._model is None:
@@ -125,8 +196,14 @@ class VLMModel:
         Returns:
             List of UIRegion with detected elements
         """
+        cache_key = self._cache_key("detect_ui_elements", image)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            logger.debug("VLM detect_ui_elements cache hit")
+            return list(cached)
+
         pil_image = Image.fromarray(image)
-        
+
         prompt = """Analyze this screenshot and identify all interactive UI elements.
 For each element, provide:
 1. Role (button, input_field, icon, checkbox, dropdown, link, tab, panel)
@@ -142,6 +219,10 @@ Focus on clickable and interactive elements."""
             response = self._query(pil_image, prompt)
             regions = self._parse_ui_response(response)
             logger.debug(f"VLM detected {len(regions)} UI regions")
+            # Only cache successful, non-empty results so a transient Ollama
+            # outage (which returns []) does not poison the cache.
+            if regions:
+                self._cache_put(cache_key, regions)
             return regions
         except Exception as e:
             logger.error(f"VLM UI detection failed: {e}")
@@ -149,8 +230,14 @@ Focus on clickable and interactive elements."""
     
     def describe_screen(self, image: np.ndarray) -> str:
         """Get a general description of what's on screen."""
+        cache_key = self._cache_key("describe_screen", image)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            logger.debug("VLM describe_screen cache hit")
+            return cached
+
         pil_image = Image.fromarray(image)
-        
+
         prompt = """Describe what application and screen is shown in this screenshot.
 Include:
 - Application name (if identifiable)
@@ -161,7 +248,12 @@ Include:
 Be concise but specific."""
 
         try:
-            return self._query(pil_image, prompt)
+            result = self._query(pil_image, prompt)
+            # Only cache a real description; an empty string means the VLM call
+            # failed (for example Ollama is down) and must not be memoized.
+            if result:
+                self._cache_put(cache_key, result)
+            return result
         except Exception as e:
             logger.error(f"VLM describe failed: {e}")
             return ""
