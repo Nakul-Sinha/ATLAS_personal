@@ -7,8 +7,42 @@ Supports both local models (llama.cpp) and Ollama.
 """
 
 from pydantic import BaseModel
-from typing import Optional, Literal
+from typing import Literal
+from pathlib import Path
 import os
+
+# Anchor default relative paths (models, database, screenshots) to the ml/
+# package directory, not the current working directory, so the agent works no
+# matter where it is launched from.
+_ML_DIR = Path(__file__).resolve().parent.parent
+
+
+def _env_str(name: str, default: str) -> str:
+    val = os.getenv(name)
+    return val if val is not None and val != "" else default
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    val = os.getenv(name)
+    if val is None:
+        return default
+    return val.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        val = os.getenv(name)
+        return float(val) if val not in (None, "") else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        val = os.getenv(name)
+        return int(val) if val not in (None, "") else default
+    except (TypeError, ValueError):
+        return default
 
 
 class OCRConfig(BaseModel):
@@ -49,7 +83,9 @@ class LLMConfig(BaseModel):
     ollama_model: str = "llama3.2"  # User has 'llama3.2:latest'
     
     # llama.cpp settings (fallback)
-    model_path: str = "./models/downloads/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+    model_path: str = str(
+        _ML_DIR / "models" / "downloads" / "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf"
+    )
     n_ctx: int = 4096
     n_gpu_layers: int = -1  # -1 = use all GPU layers (was 0 for CPU only)
     
@@ -78,7 +114,7 @@ class VerificationConfig(BaseModel):
 class MemoryConfig(BaseModel):
     """Memory/persistence configuration."""
     enabled: bool = True
-    db_path: str = "./data/memory.db"
+    db_path: str = str(_ML_DIR / "data" / "memory.db")
     max_patterns: int = 1000
 
 
@@ -96,13 +132,61 @@ class PipelineConfig(BaseModel):
     debug_mode: bool = True
     log_level: str = "INFO"
     save_screenshots: bool = True
-    screenshots_dir: str = "./data/screenshots"
+    screenshots_dir: str = str(_ML_DIR / "data" / "screenshots")
 
 
 def load_config() -> PipelineConfig:
-    """Load configuration from environment or defaults."""
-    # TODO: Load from .env or config file
-    return PipelineConfig()
+    """
+    Build configuration from defaults, then apply environment overrides.
+
+    A .env file in the ml/ directory (or the repo root) is loaded first if
+    python-dotenv is available. Recognized variables:
+
+      OLLAMA_BASE_URL, ATLAS_LLM_MODEL, ATLAS_VLM_MODEL, ATLAS_LLM_BACKEND,
+      ATLAS_VLM_BACKEND, ATLAS_USE_VLM, ATLAS_USE_GPU, ATLAS_CAPTURE_MONITOR,
+      ATLAS_MAX_RETRIES, ATLAS_LOG_LEVEL, ATLAS_DEBUG, ATLAS_SAVE_SCREENSHOTS,
+      ATLAS_MEMORY_ENABLED, ATLAS_MEMORY_DB.
+    """
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(_ML_DIR.parent / ".env")
+        load_dotenv(_ML_DIR / ".env", override=True)
+    except Exception:
+        # python-dotenv is optional; plain environment variables still apply.
+        pass
+
+    cfg = PipelineConfig()
+
+    # Ollama
+    cfg.ollama.base_url = _env_str("OLLAMA_BASE_URL", cfg.ollama.base_url)
+
+    # LLM
+    cfg.llm.backend = _env_str("ATLAS_LLM_BACKEND", cfg.llm.backend)  # type: ignore[assignment]
+    cfg.llm.ollama_model = _env_str("ATLAS_LLM_MODEL", cfg.llm.ollama_model)
+
+    # VLM
+    cfg.vlm.backend = _env_str("ATLAS_VLM_BACKEND", cfg.vlm.backend)  # type: ignore[assignment]
+    cfg.vlm.ollama_model = _env_str("ATLAS_VLM_MODEL", cfg.vlm.ollama_model)
+    cfg.vlm.use_vlm = _env_bool("ATLAS_USE_VLM", cfg.vlm.use_vlm)
+
+    # OCR / screen
+    cfg.ocr.use_gpu = _env_bool("ATLAS_USE_GPU", cfg.ocr.use_gpu)
+    cfg.screen.capture_monitor = _env_int("ATLAS_CAPTURE_MONITOR", cfg.screen.capture_monitor)
+
+    # Verification
+    cfg.verification.max_retries = _env_int("ATLAS_MAX_RETRIES", cfg.verification.max_retries)
+
+    # Memory
+    cfg.memory.enabled = _env_bool("ATLAS_MEMORY_ENABLED", cfg.memory.enabled)
+    cfg.memory.db_path = _env_str("ATLAS_MEMORY_DB", cfg.memory.db_path)
+
+    # Global
+    cfg.log_level = _env_str("ATLAS_LOG_LEVEL", cfg.log_level)
+    cfg.debug_mode = _env_bool("ATLAS_DEBUG", cfg.debug_mode)
+    cfg.save_screenshots = _env_bool("ATLAS_SAVE_SCREENSHOTS", cfg.save_screenshots)
+
+    return cfg
 
 
 # Global config instance

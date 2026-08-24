@@ -3,9 +3,9 @@ ATLAS ML Pipeline - Model Loaders
 =================================
 
 This module handles loading and initializing all ML models:
-- PaddleOCR for text detection
-- LLaVA for visual understanding
-- Mistral/Phi for reasoning and planning
+- EasyOCR for text detection
+- LLaVA (via Ollama) for visual understanding
+- Llama 3.2 (via Ollama), with a llama.cpp fallback, for reasoning and planning
 """
 
 from .ocr_model import OCRModel

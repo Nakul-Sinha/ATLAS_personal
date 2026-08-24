@@ -12,5 +12,14 @@ Handles all visual perception:
 from .screen_capture import ScreenCapture
 from .bbox_fusion import BoundingBoxFusion
 from .perception_engine import PerceptionEngine
+from .modal_detection import detect_modal, is_blocking_modal
+from . import window_state
 
-__all__ = ["ScreenCapture", "BoundingBoxFusion", "PerceptionEngine"]
+__all__ = [
+    "ScreenCapture",
+    "BoundingBoxFusion",
+    "PerceptionEngine",
+    "detect_modal",
+    "is_blocking_modal",
+    "window_state",
+]

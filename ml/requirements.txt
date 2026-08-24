@@ -1,38 +1,41 @@
 # ATLAS ML Pipeline - Dependencies
 # ================================
+# These are the packages the runtime code actually imports. The reasoning and
+# vision models run through Ollama (see below), which is a separate install and
+# not a pip package.
 
-# Core ML Framework
+# OCR (primary engine; pulls torch and torchvision as dependencies)
+easyocr>=1.7.0
 torch>=2.0.0
 torchvision>=0.15.0
 
-# OCR
-paddlepaddle>=2.5.0
-paddleocr>=2.7.0
-
-# Vision-Language Model (LLaVA)
-transformers>=4.36.0
-accelerate>=0.25.0
-bitsandbytes>=0.41.0  # For quantization
-
-# Local LLM (Mistral/Phi via llama.cpp)
-llama-cpp-python>=0.2.0
-
-# Computer Vision
+# Computer vision and arrays
 opencv-python>=4.8.0
 numpy>=1.24.0
-
-# Screen Capture & Control
-mss>=9.0.0
-pyautogui>=0.9.54
 pillow>=10.0.0
 
-# Agent Orchestration
-langgraph>=0.0.20
+# Screen capture and OS input
+mss>=9.0.0
+pyautogui>=0.9.54
 
-# Windows-specific (for window management)
-pywin32>=306
+# HTTP client for the Ollama backend
+requests>=2.31.0
+
+# Model download helper for the optional llama.cpp fallback
+huggingface_hub>=0.20.0
 
 # Utilities
-pydantic>=2.0.0  # For config/schema validation
-python-dotenv>=1.0.0  # Environment config
-loguru>=0.7.0  # Logging
+pydantic>=2.0.0        # config and schema validation
+python-dotenv>=1.0.0   # .env / environment overrides
+loguru>=0.7.0          # logging
+
+# ---------------------------------------------------------------------------
+# Runtime prerequisite (NOT a pip package):
+#   Ollama, with the models pulled:
+#     ollama pull llama3.2
+#     ollama pull llava
+#
+# Optional extras:
+#   - Local llama.cpp fallback backend:  pip install -r requirements-llama.txt
+#   - Window focus / bring-to-front on Windows:  pip install pywin32
+# ---------------------------------------------------------------------------

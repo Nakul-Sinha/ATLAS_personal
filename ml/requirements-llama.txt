@@ -1,0 +1,10 @@
+# Optional: local llama.cpp fallback backend for the ML pipeline.
+#
+# Only needed when config.llm.backend is set to "llama_cpp" instead of the
+# default "ollama". This is a heavyweight source build that requires a C++
+# toolchain and CMake, so it is kept out of the core requirements.
+#
+#   pip install -r requirements-llama.txt
+#   python download_model.py   # fetches the TinyLlama GGUF used as fallback
+
+llama-cpp-python>=0.2.0

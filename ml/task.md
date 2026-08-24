@@ -136,10 +136,15 @@ ollama pull llava
 ---
 
 ## Phase 9: Critical Issues (from errors.txt)
-- [x] CRITICAL-001: DPI/Scaling handling (detect_dpi_scale implemented)
-- [ ] CRITICAL-002: Modal/Dialog detection
-- [ ] CRITICAL-003: App window state tracking
-- [ ] CRITICAL-004: Multi-monitor support
+- [x] CRITICAL-001: DPI/Scaling handling. set_dpi_awareness() is called at agent
+      init so captured pixels and click pixels share one space, and clicks now go
+      through ScreenFrame.to_absolute() instead of bypassing it.
+- [x] CRITICAL-002: Modal/Dialog detection. perception/modal_detection.py detects a
+      centered blocking overlay; the agent loop checks it each step.
+- [x] CRITICAL-003: App window state tracking. perception/window_state.py inspects
+      and focuses the target window (best-effort, Windows) at task start.
+- [x] CRITICAL-004: Multi-monitor support. ScreenFrame keeps the monitor offset and
+      to_absolute() adds it, so clicks land correctly on non-primary monitors.
 
 ---
 
