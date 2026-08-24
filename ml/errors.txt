@@ -112,11 +112,11 @@ CRITICAL-002    | ADDRESSED   | modal_detection.py    | detect_modal() checked e
 CRITICAL-003    | ADDRESSED   | window_state.py       | bring_to_front() best-effort
 CRITICAL-004    | ADDRESSED   | screen_capture.py     | monitor offset kept in frame and
                 |             | agent_loop.py         | added in to_absolute()
-NON-CRIT-001    | OPEN        |                       |
-NON-CRIT-002    | OPEN        |                       |
-NON-CRIT-003    | OPEN        |                       |
-NON-CRIT-004    | OPEN        |                       |
-NON-CRIT-005    | OPEN        |                       |
+NON-CRIT-001    | ADDRESSED   | agent/error_taxonomy  | classify_error routes recovery
+NON-CRIT-002    | ADDRESSED   | actions/executor.py   | chunked, unicode-safe typing
+NON-CRIT-003    | ADDRESSED   | agent/app_context.py  | app switch + copy/paste relay
+NON-CRIT-004    | ADDRESSED   | models/vlm_model.py   | perceptual-hash VLM cache
+NON-CRIT-005    | ADDRESSED   | perception/icon_match | text-free icon detection + fuse
 NON-CRIT-006    | ADDRESSED   | memory/memory.py      | SQLite schema, wired into loop
 
 ================================================================================

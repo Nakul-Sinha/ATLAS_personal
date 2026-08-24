@@ -42,6 +42,9 @@ class ActionExecutor:
     def __init__(self):
         self.move_duration = config.screen.mouse_move_duration
         self.type_interval = config.screen.typing_interval
+        # Delay inserted between typed chunks so apps that buffer input slowly do
+        # not drop keystrokes (NON-CRIT-002). Kept small to stay responsive.
+        self.chunk_delay = 0.05
         self.last_action = None
         self.last_action_time = 0
         
@@ -85,11 +88,86 @@ class ActionExecutor:
         return True
     
     def _execute_type(self, action: TypeAction) -> bool:
-        """Execute keyboard typing."""
-        pg = _pyautogui()
-        pg.write(action.text, interval=action.interval or self.type_interval)
+        """Execute keyboard typing (robust, chunked, unicode-safe)."""
+        interval = action.interval or self.type_interval
+        self._type_text(
+            action.text,
+            interval=interval,
+            chunk_size=action.chunk_size,
+            verify_each=action.verify_each,
+        )
         logger.debug(f"Typed {len(action.text)} characters")
         return True
+
+    def _type_text(self, text: str, interval: float = None,
+                   chunk_size: int = None, verify_each: bool = False) -> bool:
+        """
+        Type text robustly (NON-CRIT-002).
+
+        The text is typed in optional fixed-size chunks with a short delay
+        between chunks, so applications that buffer input slowly do not drop
+        fast keystrokes. Unicode and special characters go through
+        pyautogui.write() where supported; any character PyAutoGUI cannot emit
+        is logged and skipped rather than aborting the whole action.
+
+        Args:
+            text: The string to type.
+            interval: Per-character delay in seconds (defaults to the configured
+                typing_interval). A larger value trades speed for reliability.
+            chunk_size: If a positive int, type in chunks of this many characters
+                with a delay between them; None types the whole string at once.
+            verify_each: If True, pause a little longer between chunks so each is
+                buffered by the app before the next is sent.
+
+        PyAutoGUI is still resolved lazily via _pyautogui(); nothing here imports
+        it at module load.
+        """
+        if not text:
+            return True
+
+        pg = _pyautogui()
+        if interval is None:
+            interval = self.type_interval
+
+        if chunk_size and chunk_size > 0:
+            chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+        else:
+            chunks = [text]
+
+        # A slightly longer settle when the caller asked to buffer each chunk.
+        settle = self.chunk_delay * 2 if verify_each else self.chunk_delay
+        last = len(chunks) - 1
+        for idx, chunk in enumerate(chunks):
+            self._write_chunk(pg, chunk, interval)
+            if verify_each:
+                logger.debug(f"Typed chunk {idx + 1}/{len(chunks)} ({len(chunk)} chars)")
+            if idx < last:
+                time.sleep(settle)
+
+        logger.debug(f"Typed {len(text)} characters in {len(chunks)} chunk(s)")
+        return True
+
+    def _write_chunk(self, pg, chunk: str, interval: float) -> None:
+        """
+        Write one chunk, degrading to per-character typing on failure.
+
+        pyautogui.write() handles the common printable/unicode characters. If a
+        chunk raises (for example on an unusual character), fall back to typing
+        it character by character so a single problematic character does not
+        abort the whole chunk; such characters are logged and skipped.
+        """
+        try:
+            pg.write(chunk, interval=interval)
+        except Exception as e:
+            logger.debug(f"Chunk write failed ({e}); retrying character by character")
+            for ch in chunk:
+                try:
+                    pg.write(ch, interval=interval)
+                except Exception as char_err:
+                    logger.warning(
+                        f"Skipping character {ch!r} PyAutoGUI could not type: {char_err}"
+                    )
+                    continue
     
     def _execute_key(self, action: KeyAction) -> bool:
         """Execute key press."""

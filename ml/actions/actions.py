@@ -6,6 +6,7 @@ Atomic action types for OS-level interaction.
 
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+from typing import Optional
 
 
 @dataclass
@@ -35,8 +36,15 @@ class ClickAction(Action):
 class TypeAction(Action):
     """Type text."""
     text: str = ""
-    interval: float = 0.02  # Seconds between keystrokes
-    
+    interval: float = 0.02  # Seconds between keystrokes (per-char delay)
+    # Chunked typing (NON-CRIT-002): if set to a positive int, the text is typed
+    # in fixed-size chunks with a short delay between chunks so apps that buffer
+    # input slowly do not drop fast keystrokes. None types the whole string at once.
+    chunk_size: Optional[int] = None
+    # If True, pause a little longer between chunks so each chunk is buffered by
+    # the app before the next one is sent (a lightweight settle, not visual OCR).
+    verify_each: bool = False
+
     def describe(self) -> str:
         preview = self.text[:20] + "..." if len(self.text) > 20 else self.text
         return f"Type: '{preview}'"

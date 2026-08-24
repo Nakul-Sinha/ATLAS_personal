@@ -74,6 +74,11 @@ class VLMConfig(BaseModel):
     max_new_tokens: int = 512
     temperature: float = 0.2
 
+    # Cross-validation and robustness (opt-in; OCR-only stays the fast default)
+    cross_validate: bool = False  # fuse OCR with VLM in the agent loop
+    use_icons: bool = True        # add text-free icon candidates when fusing
+    cache_enabled: bool = True    # cache VLM results for static screens
+
 
 class LLMConfig(BaseModel):
     """Local LLM configuration."""
@@ -169,6 +174,8 @@ def load_config() -> PipelineConfig:
     cfg.vlm.backend = _env_str("ATLAS_VLM_BACKEND", cfg.vlm.backend)  # type: ignore[assignment]
     cfg.vlm.ollama_model = _env_str("ATLAS_VLM_MODEL", cfg.vlm.ollama_model)
     cfg.vlm.use_vlm = _env_bool("ATLAS_USE_VLM", cfg.vlm.use_vlm)
+    cfg.vlm.cross_validate = _env_bool("ATLAS_CROSS_VALIDATE", cfg.vlm.cross_validate)
+    cfg.vlm.use_icons = _env_bool("ATLAS_USE_ICONS", cfg.vlm.use_icons)
 
     # OCR / screen
     cfg.ocr.use_gpu = _env_bool("ATLAS_USE_GPU", cfg.ocr.use_gpu)

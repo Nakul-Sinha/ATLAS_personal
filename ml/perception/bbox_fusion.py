@@ -43,24 +43,48 @@ class BoundingBoxFusion:
         self.expand_ratio = expand_ratio
         
     def fuse(self, ocr_results: List[Dict], vlm_regions: List[Dict],
-             screen_width: int, screen_height: int, image: Optional[np.ndarray] = None) -> List[FusedElement]:
-        """Fuse all bounding box sources into unified elements."""
+             screen_width: int, screen_height: int, image: Optional[np.ndarray] = None,
+             icon_regions: Optional[List[Dict]] = None) -> List[FusedElement]:
+        """
+        Fuse all bounding box sources into unified elements.
+
+        Args:
+            ocr_results: OCR detections (text + boxes).
+            vlm_regions: VLM UI regions.
+            screen_width: Frame width in pixels.
+            screen_height: Frame height in pixels.
+            image: Optional frame used for geometric detection.
+            icon_regions: Optional icon candidates (for example from
+                perception.detect_icon_candidates / match_template). Each is a
+                dict with bbox_normalized, role, confidence, and source. When
+                provided they participate in fusion alongside OCR/VLM boxes so
+                text-free icons are not lost (NON-CRIT-005). Backward
+                compatible: existing callers that omit this are unchanged.
+        """
         all_boxes = []
-        
+
         for ocr in ocr_results:
             bbox = ocr.get("bbox_rect") or self._polygon_to_rect(ocr.get("bbox", []))
             bbox_norm = self._normalize_bbox(bbox, screen_width, screen_height)
             bbox_norm = self._expand_bbox(bbox_norm, self.expand_ratio)
             all_boxes.append({"bbox_normalized": bbox_norm, "role": self._infer_role(ocr.get("text", "")),
                               "text": ocr.get("text"), "confidence": ocr.get("confidence", 0.8), "source": "ocr"})
-        
+
         for vlm in vlm_regions:
             all_boxes.append({"bbox_normalized": vlm.get("bbox_normalized", [0,0,1,1]), "role": vlm.get("role", "unknown"),
                               "description": vlm.get("description"), "confidence": vlm.get("confidence", 0.7), "source": "vlm"})
-        
+
         if image is not None:
             all_boxes.extend(self._detect_geometric(image, screen_width, screen_height))
-        
+
+        if icon_regions:
+            for icon in icon_regions:
+                all_boxes.append({"bbox_normalized": icon.get("bbox_normalized", [0, 0, 1, 1]),
+                                  "role": icon.get("role", "icon"),
+                                  "description": icon.get("description"),
+                                  "confidence": icon.get("confidence", 0.5),
+                                  "source": icon.get("source", "icon")})
+
         merged = self._merge_overlapping(all_boxes)
         elements = [FusedElement(role=b["role"], bbox_normalized=b["bbox_normalized"], confidence=b["confidence"],
                                   sources=b.get("sources", [b.get("source")]), text=b.get("text"), description=b.get("description")) for b in merged]

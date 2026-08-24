@@ -161,3 +161,72 @@ class PerceptionEngine:
         if not self._enable_vlm:
             logger.warning("VLM not enabled. Use enable_vlm=True in constructor.")
         return self.perceive(monitor, use_vlm=True)
+
+    def perceive_fused(self, monitor: Optional[int] = None,
+                       use_cache: bool = True) -> PerceptionResult:
+        """
+        Fused perception that always runs OCR and adds VLM cross-validation
+        when the VLM is initialized (NON-CRIT-004).
+
+        OCR runs on every call. The VLM runs only when it has already been
+        initialized (self._vlm_initialized); when enable_vlm was set in the
+        constructor but the model has not loaded yet, it is initialized here
+        opportunistically. OCR and VLM detections are then fused through
+        BoundingBoxFusion, which is where the two sources cross-validate each
+        other.
+
+        The VLM per-screen cache is reused for static screens, so repeatedly
+        perceiving an unchanged screen does not pay the full VLM latency again.
+        This is additive: quick_perceive() and full_perceive() are unchanged.
+
+        Args:
+            monitor: Monitor to capture (None for the configured default).
+            use_cache: Reuse the VLM result cache for near-identical static
+                       screens. Set False to force a fresh VLM query.
+
+        Returns:
+            PerceptionResult with fused OCR + VLM elements.
+        """
+        # OCR is always required.
+        if not self._ocr_initialized:
+            self.initialize_ocr()
+
+        # Load the VLM opportunistically when it was enabled but not yet loaded.
+        if self._enable_vlm and not self._vlm_initialized:
+            self.initialize_vlm()
+
+        # Step 3: Screen capture
+        frame = self.screen_capture.grab(monitor)
+        logger.debug(f"perceive_fused captured {frame.width}x{frame.height}")
+
+        # Step 4: OCR (always)
+        ocr_raw = self.ocr.detect(frame.image)
+        ocr_results = [{"text": r.text, "bbox": r.bbox, "bbox_rect": r.bbox_rect,
+                        "confidence": r.confidence} for r in ocr_raw]
+
+        # Step 5: VLM (only when initialized), reusing its static-screen cache.
+        vlm_regions: List[Dict[str, Any]] = []
+        screen_description = ""
+        if self._vlm_initialized and self.vlm is not None:
+            prev_cache_enabled = getattr(self.vlm, "cache_enabled", None)
+            try:
+                if prev_cache_enabled is not None:
+                    self.vlm.cache_enabled = use_cache
+                vlm_raw = self.vlm.detect_ui_elements(frame.image)
+                vlm_regions = [{"role": r.role, "description": r.description,
+                                "bbox_normalized": r.bbox_normalized,
+                                "confidence": r.confidence} for r in vlm_raw]
+                screen_description = self.vlm.describe_screen(frame.image)
+            except Exception as e:
+                logger.warning(f"perceive_fused VLM step failed, continuing with OCR only: {e}")
+            finally:
+                if prev_cache_enabled is not None:
+                    self.vlm.cache_enabled = prev_cache_enabled
+
+        # Step 6: Fusion (cross-validates OCR and VLM boxes).
+        fused = self.fusion.fuse(ocr_results, vlm_regions, frame.width, frame.height, frame.image)
+
+        return PerceptionResult(
+            frame=frame, ocr_results=ocr_results, vlm_regions=vlm_regions,
+            fused_elements=fused, screen_description=screen_description
+        )

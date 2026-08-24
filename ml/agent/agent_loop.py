@@ -8,10 +8,12 @@ import time
 from loguru import logger
 
 from models import LLMModel
-from perception import PerceptionEngine, detect_modal, window_state
+from perception import PerceptionEngine, detect_modal, detect_icon_candidates, window_state
 from actions import ActionExecutor, ClickAction, TypeAction, KeyAction, ScrollAction, WaitAction
 from agent.state import AgentState, AgentStatus
 from agent.verification import Verifier
+from agent.error_taxonomy import classify_error, recovery_hint, ErrorType
+from agent.app_context import AppContextManager
 from memory import Memory
 from memory.memory import PatternRecord
 from config import config
@@ -33,6 +35,8 @@ class AgentLoop:
         self.verifier = Verifier(self.perception)
         self.memory = Memory()
         self.state = AgentState()
+        # Tracks the focused app across a multi-app task (NON-CRIT-003).
+        self.app_context = AppContextManager()
         self._initialized = False
         # The element resolved for the most recent action, used when storing
         # a success pattern so the correct bbox is recorded.
@@ -141,11 +145,38 @@ class AgentLoop:
             return True
             
         logger.info(f"Executing Step {step.step_number}: {step.description}")
-        
-        # STEP 3-6: Perceive (OCR-only for speed and reliability)
-        # VLM detect_ui_elements returns unreliable bboxes and takes ~60s per call.
-        # OCR-only path is fast (~5s) and gives accurate text+bbox data.
-        self.state.perception = self.perception.quick_perceive()
+
+        # NON-CRIT-003: if this step implies another app, focus it first so the
+        # capture shows the right window (for example "paste into Word").
+        try:
+            target_app = self.app_context.detect_app_switch(step.description)
+            if target_app and target_app != self.app_context.current_app:
+                if self.app_context.switch_app(target_app):
+                    logger.info(f"Switched context to {target_app}")
+        except Exception as e:
+            logger.debug(f"App switch skipped: {e}")
+
+        # STEP 3-6: Perceive. OCR-only is the fast default (~5s). When
+        # cross-validation is enabled, fuse OCR with the VLM (cached for static
+        # screens, NON-CRIT-004) and add text-free icon candidates (NON-CRIT-005).
+        if getattr(config.vlm, "cross_validate", False):
+            self.state.perception = self.perception.perceive_fused(use_cache=True)
+            if getattr(config.vlm, "use_icons", True):
+                try:
+                    icons = detect_icon_candidates(self.state.perception.frame.image)
+                    if icons:
+                        self.state.perception.fused_elements = self.perception.fusion.fuse(
+                            self.state.perception.ocr_results,
+                            self.state.perception.vlm_regions,
+                            self.state.perception.frame.width,
+                            self.state.perception.frame.height,
+                            self.state.perception.frame.image,
+                            icon_regions=icons,
+                        )
+                except Exception as e:
+                    logger.debug(f"Icon detection skipped: {e}")
+        else:
+            self.state.perception = self.perception.quick_perceive()
 
         # CRITICAL-002: notice a blocking modal dialog before planning an action.
         try:
@@ -321,15 +352,26 @@ class AgentLoop:
                 last_error = last_record.error
         
         logger.warning(f"Step {step.step_number} failed (attempt {self.state.retry_count}): {last_error}")
-        
+
+        # NON-CRIT-001: classify the failure so recovery is grounded per category
+        # instead of generic. An infeasible task is skipped rather than retried.
+        err_type = classify_error(last_error, {
+            "action_type": getattr(last_action, "action_type", None),
+            "stage": "verification",
+        })
+        logger.info(f"Error class: {err_type.name} | hint: {recovery_hint(err_type)}")
+        if err_type is ErrorType.TASK:
+            logger.info("Task-level failure classified as infeasible; skipping step")
+            return "skip"
+
         # Ask LLM for recovery strategy
         try:
             screen_desc = ""
             if self.state.perception:
                 screen_desc = self.state.perception.screen_description or f"Screen with {len(self.state.perception.fused_elements)} elements"
-            
+
             recovery = self.llm.handle_error(
-                error_description=last_error,
+                error_description=f"{last_error} (classified as {err_type.name}: {recovery_hint(err_type)})",
                 screen_state=screen_desc,
                 last_action=last_action,
                 retry_count=self.state.retry_count
