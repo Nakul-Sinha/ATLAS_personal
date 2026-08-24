@@ -1,0 +1,17 @@
+# Ruff configuration for the ATLAS Python code (backend and ml).
+line-length = 100
+target-version = "py312"
+
+[lint]
+# Ruff's defaults are the E (pycodestyle) and F (pyflakes) rule sets. The ml
+# code uses a compact one-line-helper style in a few hot paths, so the
+# multiple-statement rules are relaxed; correctness rules stay on.
+ignore = [
+  "E701",  # multiple statements on one line (colon)
+  "E702",  # multiple statements on one line (semicolon)
+  "E741",  # ambiguous variable name (l, I, O) in existing math helpers
+]
+
+[lint.per-file-ignores]
+# Test files may keep imports that document intent.
+"**/tests/**" = ["F401"]

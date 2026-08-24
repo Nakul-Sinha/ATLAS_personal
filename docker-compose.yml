@@ -1,0 +1,25 @@
+# ATLAS backend relay.
+#
+# The container has no desktop session, so the agent runs in mock mode by
+# default (it simulates the perceive, plan, act, verify steps). To drive the
+# real agent, run the backend on a machine with a desktop and Ollama instead of
+# in a container, or point OLLAMA_BASE_URL at a reachable Ollama and set
+# ATLAS_AGENT_MODE=auto.
+#
+#   docker compose up --build
+#
+services:
+  backend:
+    build: ./backend
+    image: atlas-backend
+    ports:
+      - "8000:8000"
+    environment:
+      ATLAS_BACKEND_HOST: "0.0.0.0"
+      ATLAS_BACKEND_PORT: "8000"
+      ATLAS_AGENT_MODE: "mock"
+      # On Linux/Windows Docker Desktop, host.docker.internal reaches the host.
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

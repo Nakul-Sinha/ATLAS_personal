@@ -8,7 +8,6 @@ PIPELINE STEP 10
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 import time
-from loguru import logger
 
 from perception.perception_engine import PerceptionEngine, PerceptionResult
 from models.llm_model import PlannedAction
@@ -138,7 +137,7 @@ class Verifier:
             
         return VerificationResult(
             passed=False, confidence=0.2,
-            reason=f"Typed text not found and no visual change"
+            reason="Typed text not found and no visual change"
         )
     
     def _verify_key(self, action: PlannedAction,

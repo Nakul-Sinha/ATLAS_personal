@@ -7,7 +7,6 @@ PIPELINE STEPS 3-6 combined.
 
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass
-import numpy as np
 from loguru import logger
 
 from models import OCRModel

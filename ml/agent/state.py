@@ -5,7 +5,7 @@ Tracks current state of the agent during execution.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from enum import Enum
 
 from models.llm_model import Intent, TaskStep, PlannedAction
