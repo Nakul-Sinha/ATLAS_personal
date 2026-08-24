@@ -1,5 +1,5 @@
 """
-ATLAS MCP Agent — Browser Agent
+ATLAS MCP Agent - Browser Agent
 ================================
 
 End-to-end autonomous browser agent that:
@@ -8,7 +8,7 @@ End-to-end autonomous browser agent that:
   3. Runs an agentic loop: LLM decides actions → executes via MCP → observes → repeats
   4. Completes the user's task or reports failure
 
-This is fully self-contained — no dependencies on the rest of the ATLAS pipeline.
+This is fully self-contained - no dependencies on the rest of the ATLAS pipeline.
 """
 
 from __future__ import annotations
@@ -60,15 +60,19 @@ def _is_port_open(port: int, host: str = "127.0.0.1") -> bool:
         return s.connect_ex((host, port)) == 0
 
 
-def launch_chrome_with_debugging(config: MCPConfig, port: int = 9222) -> bool:
+def launch_chrome_with_debugging(config: MCPConfig, port: Optional[int] = None) -> bool:
     """Launch Chrome with remote debugging enabled.
-    
+
     Uses the user's real profile so all cookies/sessions are available.
     Returns True if Chrome is ready on the debug port, False on failure.
-    
+
+    The debug port defaults to config.cdp_port (env CDP_PORT, default 9222).
+
     On Windows, uses PowerShell Start-Process because Python's subprocess.Popen
     keeps handles that prevent Chrome from opening its debug port.
     """
+    if port is None:
+        port = config.cdp_port
     if _is_port_open(port):
         console.print(f"[green]Chrome already running on debug port {port}[/green]")
         return True
@@ -83,7 +87,7 @@ def launch_chrome_with_debugging(config: MCPConfig, port: int = 9222) -> bool:
     console.print(f"[dim]  Profile: {config.chrome_user_data_dir}[/dim]")
     
     if sys.platform == "win32":
-        # Use PowerShell Start-Process — Python's subprocess.Popen keeps handles
+        # Use PowerShell Start-Process - Python's subprocess.Popen keeps handles
         # that prevent Chrome from binding its remote debugging port.
         ps_cmd = (
             f'Start-Process -FilePath "{chrome_exe}" '
@@ -126,12 +130,19 @@ def launch_chrome_with_debugging(config: MCPConfig, port: int = 9222) -> bool:
 
 # ─── Playwright MCP Server Parameters ─────────────────────────────────────────
 
-def get_playwright_server_params(config: MCPConfig, cdp_port: int = 9222) -> StdioServerParameters:
+def get_playwright_server_params(config: MCPConfig, cdp_port: Optional[int] = None) -> StdioServerParameters:
     """Get the params to launch @playwright/mcp as a subprocess.
-    
+
     When chrome_profile is enabled, connects to Chrome via CDP
-    (Chrome DevTools Protocol) on the given port.
+    (Chrome DevTools Protocol) on the given port. The port defaults to
+    config.cdp_port (env CDP_PORT, default 9222).
+
+    Note: this launches @playwright/mcp@latest via npx, so Node.js and npx
+    must be installed and on PATH. See requirements.txt and README.md.
     """
+    if cdp_port is None:
+        cdp_port = config.cdp_port
+
     args = ["@playwright/mcp@latest"]
     
     if config.chrome_profile:
@@ -161,7 +172,7 @@ def mcp_tools_to_openai_tools(mcp_tools: list) -> List[Dict[str, Any]]:
             },
         }
         if tool.inputSchema:
-            # Clean up the schema — remove unsupported keys for OpenAI
+            # Clean up the schema - remove unsupported keys for OpenAI
             schema = dict(tool.inputSchema)
             schema.pop("additionalProperties", None)
             schema.pop("$schema", None)
@@ -185,7 +196,7 @@ RULES:
 5. Think step-by-step. Break complex tasks into simple actions.
 6. If something fails, try an alternative approach.
 7. When the task is COMPLETE, respond with the final result in plain text (no tool call).
-8. NEVER fabricate information — only report what you actually see on the page.
+8. NEVER fabricate information - only report what you actually see on the page.
 9. Keep interactions minimal and efficient.
 
 IMPORTANT: Element references from browser_snapshot are the primary way to target elements.
@@ -235,8 +246,8 @@ class BrowserAgent:
         console.print(f"[dim]Headless: {self.config.playwright_headless}[/dim]\n")
         
         # ── Launch Chrome with debugging if using profile mode ──
-        cdp_port = 9222
-        
+        cdp_port = self.config.cdp_port
+
         if self.config.chrome_profile:
             if not launch_chrome_with_debugging(self.config, cdp_port):
                 return "Error: Could not launch Chrome with remote debugging."
@@ -290,7 +301,7 @@ class BrowserAgent:
                 return f"Error: {e}"
             raise
         finally:
-            # Don't kill Chrome — leave it open for the user
+            # Don't kill Chrome - leave it open for the user
             pass
     
     async def _agent_loop(
@@ -314,12 +325,12 @@ class BrowserAgent:
                 response = self.llm.chat(self.messages, tools=tools)
             except Exception as e:
                 console.print(f"[red]LLM error: {e}[/red]")
-                return f"Error: LLM call failed — {e}"
+                return f"Error: LLM call failed - {e}"
             
             # Case 1: LLM wants to call tools
             if response.get("tool_calls"):
                 # Add assistant message with tool calls to history
-                # NOTE: content must be "" not None — Gemini rejects null content
+                # NOTE: content must be "" not None - Gemini rejects null content
                 self.messages.append({
                     "role": "assistant",
                     "content": response.get("content") or "",

@@ -1,5 +1,5 @@
 """
-ATLAS MCP Agent — Connection Test
+ATLAS MCP Agent - Connection Test
 ===================================
 
 Tests that the Playwright MCP server launches and tools are discoverable.
@@ -26,7 +26,7 @@ console = Console()
 
 async def test_mcp_connection():
     """Test that the Playwright MCP server starts and exposes tools."""
-    console.print(Panel("[bold cyan]ATLAS MCP — Connection Test[/bold cyan]", border_style="cyan"))
+    console.print(Panel("[bold cyan]ATLAS MCP - Connection Test[/bold cyan]", border_style="cyan"))
     
     server_params = StdioServerParameters(
         command="npx",
@@ -57,7 +57,7 @@ async def test_mcp_connection():
                 console.print(table)
                 console.print(f"\n[bold green]✓ {len(tools)} tools available.[/bold green]")
                 console.print("[green]✓ Everything works! Set your API key in .env and run:[/green]")
-                console.print("[white]  python __main__.py \"Go to google.com and search for ATLAS\"[/white]")
+                console.print("[white]  python run.py \"Go to google.com and search for ATLAS\"[/white]")
                 
                 return True
                 
