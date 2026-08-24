@@ -75,7 +75,7 @@ async def companion() -> JSONResponse:
             "service": "atlas-backend",
             "version": VERSION,
             "protocol": "1.0",
-            "capabilities": ["command", "stop", "progress", "result"],
+            "capabilities": ["command", "plan", "stop", "progress", "result"],
             "agent": bridge.describe_mode(),
         }
     )
@@ -118,6 +118,12 @@ async def ws(websocket: WebSocket) -> None:
                     await emit({"type": "error", "message": "Empty command"})
                     continue
                 await bridge.run_task(command, emit)
+            elif mtype == "plan":
+                command = (message.get("command") or "").strip()
+                if not command:
+                    await emit({"type": "error", "message": "Empty command"})
+                    continue
+                await bridge.plan_task(command, emit)
             elif mtype == "stop":
                 bridge.request_stop()
                 await emit(
