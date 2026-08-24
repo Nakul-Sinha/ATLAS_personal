@@ -592,6 +592,7 @@ body {
 
 .pixel-console-config {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 8px;
   margin-bottom: 10px;
@@ -624,6 +625,16 @@ body {
 
 .pixel-console-port {
   width: 70px;
+}
+
+/* Access token: takes its own full-width line under host/port/health. */
+.pixel-console-token {
+  flex: 1 1 100%;
+}
+
+.pixel-console-token-input {
+  width: 100%;
+  letter-spacing: 2px;
 }
 
 .pixel-console-health {
@@ -761,6 +772,16 @@ body {
 
 .pixel-console-btn-stop:hover {
   background: #863a31;
+}
+
+/* Preview (dry run): secondary look so Send stays the primary action. */
+.pixel-console-btn-preview {
+  background: var(--pixel-cream-light);
+  color: var(--pixel-text-dark);
+}
+
+.pixel-console-btn-preview:hover {
+  background: var(--pixel-cream-dark);
 }
 
 .pixel-console-actions {
