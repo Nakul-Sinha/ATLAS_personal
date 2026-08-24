@@ -119,6 +119,54 @@ def test_ws_unknown_type_is_rejected():
         assert msg["type"] == "error"
 
 
+def test_companion_reports_auth_required_when_token_set():
+    server.config.auth_token = "s3cret"
+    try:
+        data = client.get("/companion").json()
+        assert data["auth_required"] is True
+    finally:
+        server.config.auth_token = ""
+
+
+def test_ws_rejects_commands_until_authenticated():
+    server.config.auth_token = "s3cret"
+    try:
+        with client.websocket_connect("/ws") as ws:
+            hello = ws.receive_json()
+            assert hello.get("auth_required") is True
+
+            # A command before auth is rejected.
+            ws.send_json({"type": "command", "command": "Open Notepad"})
+            assert ws.receive_json()["type"] == "error"
+
+            # A wrong token is rejected.
+            ws.send_json({"type": "auth", "token": "nope"})
+            assert ws.receive_json()["type"] == "error"
+
+            # The right token authenticates, then a command is accepted.
+            ws.send_json({"type": "auth", "token": "s3cret"})
+            ok = ws.receive_json()
+            assert ok["type"] == "progress" and ok["step"] == "authenticated"
+
+            ws.send_json({"type": "command", "command": "Open Notepad"})
+            events = []
+            while True:
+                msg = ws.receive_json()
+                events.append(msg)
+                if msg["type"] == "result":
+                    break
+            assert events[-1]["success"] is True
+    finally:
+        server.config.auth_token = ""
+
+
+def test_ws_open_when_no_token():
+    # Default (no token): the connected banner reports auth not required.
+    with client.websocket_connect("/ws") as ws:
+        hello = ws.receive_json()
+        assert hello.get("auth_required") is False
+
+
 def test_ws_stop_is_acknowledged():
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()
