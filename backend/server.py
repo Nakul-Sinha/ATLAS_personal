@@ -76,6 +76,7 @@ async def companion() -> JSONResponse:
             "version": VERSION,
             "protocol": "1.0",
             "capabilities": ["command", "plan", "stop", "progress", "result"],
+            "auth_required": bool(config.auth_token),
             "agent": bridge.describe_mode(),
         }
     )
@@ -89,12 +90,18 @@ async def ws(websocket: WebSocket) -> None:
     async def emit(event: dict) -> None:
         await websocket.send_text(json.dumps(event))
 
+    # Optional shared-token auth. When a token is configured, the client must
+    # send {"type": "auth", "token": ...} before anything else.
+    required_token = config.auth_token
+    authenticated = not required_token
+
     await emit(
         {
             "type": "progress",
             "step": "connected",
             "status": "ready",
             "detail": "Connected to ATLAS backend",
+            "auth_required": bool(required_token),
         }
     )
 
@@ -112,7 +119,28 @@ async def ws(websocket: WebSocket) -> None:
                 continue
 
             mtype = message.get("type")
-            if mtype == "command":
+
+            if not authenticated:
+                if mtype == "auth" and message.get("token") == required_token:
+                    authenticated = True
+                    await emit(
+                        {
+                            "type": "progress",
+                            "step": "authenticated",
+                            "status": "ready",
+                            "detail": "Authenticated",
+                        }
+                    )
+                else:
+                    await emit({"type": "error", "message": "Authentication required"})
+                continue
+
+            if mtype == "auth":
+                # Already authenticated (or auth not required); acknowledge quietly.
+                await emit(
+                    {"type": "progress", "step": "authenticated", "status": "ready", "detail": "OK"}
+                )
+            elif mtype == "command":
                 command = (message.get("command") or "").strip()
                 if not command:
                     await emit({"type": "error", "message": "Empty command"})

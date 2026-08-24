@@ -66,6 +66,11 @@ class BackendConfig:
     # Comma-separated list of allowed CORS origins ("*" allows all).
     cors_origins: str = field(default_factory=lambda: os.getenv("ATLAS_CORS_ORIGINS", "*"))
 
+    # Optional shared token. When set, a WebSocket client must authenticate with
+    # {"type": "auth", "token": ...} before sending commands. Empty means open
+    # (convenient for a trusted LAN; set a token to require pairing).
+    auth_token: str = field(default_factory=lambda: os.getenv("ATLAS_AUTH_TOKEN", ""))
+
     def cors_origin_list(self) -> list[str]:
         raw = self.cors_origins.strip()
         if raw == "*" or not raw:
