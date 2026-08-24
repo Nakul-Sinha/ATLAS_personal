@@ -55,9 +55,10 @@ class _StartupGateState extends State<StartupGate> {
     final prefs = await SharedPreferences.getInstance();
     final host = prefs.getString(kAtlasHostKey) ?? '';
     final port = prefs.getInt(kAtlasPortKey) ?? kAtlasDefaultPort;
+    final token = prefs.getString(kAtlasTokenKey) ?? '';
     final hasSaved = host.isNotEmpty;
     if (hasSaved) {
-      widget.service.configure(host, port);
+      widget.service.configure(host, port, token: token);
     }
     if (!mounted) return;
     setState(() {
@@ -220,6 +221,16 @@ class _AtlasHomeState extends State<AtlasHome> {
     FocusScope.of(context).unfocus();
   }
 
+  /// Previews the typed command as a dry run instead of executing it. The
+  /// backend returns a plan rather than running anything.
+  void _submitPreview() {
+    final text = _commandController.text.trim();
+    if (text.isEmpty) return;
+    widget.service.sendPlan(text);
+    _commandController.clear();
+    FocusScope.of(context).unfocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -317,6 +328,24 @@ class _AtlasHomeState extends State<AtlasHome> {
                                           color: _isListening
                                               ? const Color(0xFFB00020)
                                               : const Color(0xFF1A1A1A),
+                                        ),
+                                      ),
+                                    ),
+                                    // Preview (dry run): plans the command
+                                    // without executing it. Secondary to the
+                                    // primary send action beside it.
+                                    Tooltip(
+                                      message: 'Preview (dry run)',
+                                      child: GestureDetector(
+                                        onTap: _submitPreview,
+                                        behavior: HitTestBehavior.opaque,
+                                        child: const Padding(
+                                          padding: EdgeInsets.only(right: 10.0),
+                                          child: Icon(
+                                            Icons.preview,
+                                            size: 22,
+                                            color: Color(0xFF4A4A4A),
+                                          ),
                                         ),
                                       ),
                                     ),
