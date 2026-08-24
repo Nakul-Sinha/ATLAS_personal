@@ -69,6 +69,32 @@ def test_ws_command_streams_progress_then_result():
         assert "Open Notepad and type hello" in result["detail"]
 
 
+def test_ws_plan_streams_steps_without_executing():
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()  # connected banner
+        ws.send_json({"type": "plan", "command": "Open Notepad and type hello"})
+        events = []
+        while True:
+            msg = ws.receive_json()
+            events.append(msg)
+            if msg["type"] == "result":
+                break
+        plan_steps = [e for e in events if e["type"] == "progress" and e.get("step") == "plan"]
+        assert len(plan_steps) >= 1
+        result = events[-1]
+        assert result["success"] is True
+        assert "dry run" in result["detail"]
+        assert isinstance(result.get("plan"), list) and result["plan"]
+
+
+def test_ws_plan_rejects_empty_command():
+    with client.websocket_connect("/ws") as ws:
+        ws.receive_json()
+        ws.send_json({"type": "plan", "command": "   "})
+        msg = ws.receive_json()
+        assert msg["type"] == "error"
+
+
 def test_ws_invalid_json_is_reported():
     with client.websocket_connect("/ws") as ws:
         ws.receive_json()  # connected banner

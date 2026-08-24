@@ -4,21 +4,27 @@ ATLAS Backend - Agent Bridge
 
 Bridges the WebSocket relay to the vision-driven desktop agent in ``ml/``.
 
-The real agent (``ml/agent/agent_loop.py``) is a synchronous loop that needs a
-running Ollama server and a live desktop session. Neither is available on a
-headless host or in CI, so this bridge degrades gracefully:
+The ml package is written to run with its own directory as the import root
+(``from config import ...``, ``from agent import ...``). The backend has its own
+``config`` module, so importing ml in-process would collide. Instead the bridge
+runs the agent as a subprocess (``ml/agent_runner.py``) with ``cwd=ml/``, which
+isolates the import namespace and, as a bonus, keeps a GUI-automation crash from
+taking down the relay. The subprocess streams newline-delimited JSON events that
+the bridge forwards to the client unchanged.
 
-- ``real``: import and run the real ``AgentLoop``.
-- ``mock``: simulate the perceive / plan / act / verify steps and echo the task.
-- ``auto``: use ``real`` when the agent imports and Ollama is reachable, else ``mock``.
+Modes (``ATLAS_AGENT_MODE``):
 
-Progress from a real run is captured from the agent's ``loguru`` logs and
-forwarded as ``progress`` events, so the bridge does not need to modify the agent.
+- ``real``: run the real agent subprocess.
+- ``mock``: simulate perceive / plan / act / verify and echo the task.
+- ``auto``: real when the runner imports and Ollama is reachable, else mock.
+- ``plan``: never execute; stream the plan only (safe preview / dry run).
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
@@ -31,6 +37,7 @@ from config import config
 EventEmitter = Callable[[dict], Awaitable[None]]
 
 _ML_DIR = Path(__file__).resolve().parent.parent / "ml"
+_ML_RUNNER = _ML_DIR / "agent_runner.py"
 
 
 def _ollama_reachable(base_url: str, timeout: float = 2.0) -> bool:
@@ -43,27 +50,24 @@ def _ollama_reachable(base_url: str, timeout: float = 2.0) -> bool:
 
 
 def _agent_importable() -> bool:
-    """Return True if the real agent and its dependencies import cleanly."""
-    if not _ML_DIR.is_dir():
-        return False
-    added = False
-    try:
-        if str(_ML_DIR) not in sys.path:
-            sys.path.insert(0, str(_ML_DIR))
-            added = True
-        import agent  # noqa: F401  (ml/agent package)
+    """
+    Return True if the ml runner can import its dependencies.
 
-        return True
+    Checked in a subprocess with cwd=ml/ so the result reflects the exact
+    environment the runner will use (and avoids the config-name collision).
+    """
+    if not _ML_RUNNER.is_file():
+        return False
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", "import models, agent"],
+            cwd=str(_ML_DIR),
+            capture_output=True,
+            timeout=60,
+        )
+        return proc.returncode == 0
     except Exception:
         return False
-    finally:
-        if added and str(_ML_DIR) in sys.path:
-            # Leave ml on the path only when the import succeeded so a later real
-            # run can reuse it; otherwise remove our temporary entry.
-            try:
-                sys.path.remove(str(_ML_DIR))
-            except ValueError:
-                pass
 
 
 class AgentBridge:
@@ -73,8 +77,8 @@ class AgentBridge:
         self._status = "idle"
         self._stop_requested = False
         self._resolved_mode: Optional[str] = None
-        self._agent = None  # lazily constructed real AgentLoop
         self._unavailable_reason: Optional[str] = None
+        self._proc: Optional[asyncio.subprocess.Process] = None
 
     @property
     def status(self) -> str:
@@ -95,7 +99,7 @@ class AgentBridge:
             self._resolved_mode = "real"
             return self._resolved_mode
 
-        # auto
+        # auto and plan both want to know whether the real agent is usable.
         if not _agent_importable():
             self._unavailable_reason = "agent dependencies not importable"
             self._resolved_mode = "mock"
@@ -111,13 +115,16 @@ class AgentBridge:
         info = {"mode": mode}
         if mode == "mock" and self._unavailable_reason:
             info["reason"] = self._unavailable_reason
+        if config.agent_mode == "plan":
+            info["dry_run"] = True
         return info
 
     def request_stop(self) -> None:
         self._stop_requested = True
-        if self._agent is not None:
+        proc = self._proc
+        if proc is not None and proc.returncode is None:
             try:
-                self._agent.stop()
+                proc.terminate()
             except Exception:
                 pass
 
@@ -130,8 +137,10 @@ class AgentBridge:
         self._stop_requested = False
         self._status = "running"
         try:
-            mode = self.resolve_mode()
-            if mode == "real":
+            # A plan-only server never executes OS input; it previews the plan.
+            if config.agent_mode == "plan":
+                await self._run_plan(command, emit)
+            elif self.resolve_mode() == "real":
                 await self._run_real(command, emit)
             else:
                 await self._run_mock(command, emit)
@@ -139,6 +148,129 @@ class AgentBridge:
             await emit({"type": "error", "message": f"Agent run failed: {exc}"})
         finally:
             self._status = "idle"
+
+    async def plan_task(self, command: str, emit: EventEmitter) -> None:
+        """
+        Produce and stream a plan without executing any action (dry run).
+
+        The safe preview path: the agent decides what it would do and streams the
+        steps, but never touches the mouse or keyboard. Available on request
+        regardless of the configured agent mode.
+        """
+        if self._status == "running":
+            await emit({"type": "error", "message": "Agent is already running a task"})
+            return
+        self._stop_requested = False
+        self._status = "running"
+        try:
+            await self._run_plan(command, emit)
+        except Exception as exc:
+            await emit({"type": "error", "message": f"Planning failed: {exc}"})
+        finally:
+            self._status = "idle"
+
+    # -- subprocess runner ----------------------------------------------------
+
+    async def _stream_runner(self, command: str, emit: EventEmitter, plan_only: bool) -> bool:
+        """
+        Launch the ml runner subprocess and forward its JSON events.
+
+        Returns True if a terminal event (result or error) was emitted by the
+        runner. cwd=ml/ so the runner's imports resolve to the ml package.
+        """
+        args = [sys.executable, str(_ML_RUNNER)]
+        if plan_only:
+            args.append("--plan-only")
+        args.append(command)
+
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            cwd=str(_ML_DIR),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        self._proc = proc
+        saw_terminal = False
+        try:
+            assert proc.stdout is not None
+            async for raw in proc.stdout:
+                line = raw.decode("utf-8", "replace").strip()
+                if not line:
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(event, dict) and event.get("type"):
+                    if event["type"] in ("result", "error"):
+                        saw_terminal = True
+                    await emit(event)
+            await proc.wait()
+        finally:
+            self._proc = None
+
+        if self._stop_requested and not saw_terminal:
+            await emit({"type": "result", "success": False, "detail": "Stopped by user"})
+            return True
+
+        if not saw_terminal and proc.returncode not in (0, None):
+            detail = ""
+            if proc.stderr is not None:
+                try:
+                    detail = (await proc.stderr.read()).decode("utf-8", "replace").strip()[-400:]
+                except Exception:
+                    detail = ""
+            await emit({
+                "type": "error",
+                "message": f"Agent runner exited with code {proc.returncode}. {detail}".strip(),
+            })
+            saw_terminal = True
+        return saw_terminal
+
+    # -- plan (dry run) -------------------------------------------------------
+
+    async def _run_plan(self, command: str, emit: EventEmitter) -> None:
+        if self.resolve_mode() == "real":
+            if await self._stream_runner(command, emit, plan_only=True):
+                return
+            # runner produced nothing usable; fall through to a simulated plan.
+
+        # Fallback: simulate a plan so the preview works offline and in CI.
+        sim_steps = [
+            "Open the target application",
+            "Locate the relevant control on screen",
+            "Perform the requested action",
+            "Verify the result",
+        ]
+        await emit({
+            "type": "progress", "step": "understand", "status": "planned",
+            "detail": f"Intent parsed from: {command}",
+        })
+        for i, desc in enumerate(sim_steps, 1):
+            if config.mock_step_delay > 0:
+                await asyncio.sleep(config.mock_step_delay)
+            await emit({
+                "type": "progress", "step": "plan", "status": "step",
+                "detail": f"{i}. {desc}",
+            })
+        await emit({
+            "type": "result", "success": True,
+            "detail": f"Simulated plan for: {command} (dry run, nothing executed)",
+            "plan": sim_steps,
+        })
+
+    # -- real execution -------------------------------------------------------
+
+    async def _run_real(self, command: str, emit: EventEmitter) -> None:
+        await emit({
+            "type": "progress", "step": "start", "status": "executing",
+            "detail": "Launching agent",
+        })
+        if not await self._stream_runner(command, emit, plan_only=False):
+            await emit({
+                "type": "result", "success": False,
+                "detail": "Agent produced no result",
+            })
 
     # -- mock execution -------------------------------------------------------
 
@@ -164,90 +296,6 @@ class AgentBridge:
                 "type": "result",
                 "success": True,
                 "detail": f"Simulated completion of task: {command}",
-            }
-        )
-
-    # -- real execution -------------------------------------------------------
-
-    def _get_agent(self):
-        if self._agent is None:
-            if str(_ML_DIR) not in sys.path:
-                sys.path.insert(0, str(_ML_DIR))
-            from agent import AgentLoop  # type: ignore
-
-            self._agent = AgentLoop()
-        return self._agent
-
-    async def _run_real(self, command: str, emit: EventEmitter) -> None:
-        loop = asyncio.get_running_loop()
-        queue: asyncio.Queue = asyncio.Queue()
-
-        await emit(
-            {
-                "type": "progress",
-                "step": "start",
-                "status": "executing",
-                "detail": "Initializing agent",
-            }
-        )
-
-        # Bridge loguru log lines from the worker thread into progress events.
-        sink_id = None
-        try:
-            from loguru import logger
-
-            def _sink(message) -> None:
-                record = message.record
-                text = record["message"]
-                loop.call_soon_threadsafe(
-                    queue.put_nowait,
-                    {
-                        "type": "progress",
-                        "step": "agent",
-                        "status": record["level"].name.lower(),
-                        "detail": text,
-                    },
-                )
-
-            sink_id = logger.add(_sink, level="INFO")
-        except Exception:
-            sink_id = None
-
-        async def _drain_until(done: asyncio.Future) -> None:
-            while True:
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=0.25)
-                    await emit(event)
-                except asyncio.TimeoutError:
-                    if done.done():
-                        break
-
-        def _blocking_run() -> bool:
-            agent = self._get_agent()
-            return bool(agent.run(command))
-
-        run_future = loop.run_in_executor(None, _blocking_run)
-        drain_task = asyncio.create_task(_drain_until(run_future))
-        try:
-            success = await run_future
-        finally:
-            await drain_task
-            if sink_id is not None:
-                try:
-                    from loguru import logger
-
-                    logger.remove(sink_id)
-                except Exception:
-                    pass
-            # Flush any remaining queued events.
-            while not queue.empty():
-                await emit(queue.get_nowait())
-
-        await emit(
-            {
-                "type": "result",
-                "success": bool(success),
-                "detail": "Task completed" if success else "Task failed",
             }
         )
 
