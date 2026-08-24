@@ -5,6 +5,7 @@ import 'executing_card.dart';
 import 'models/atlas_event.dart';
 import 'screens/connection_screen.dart';
 import 'services/atlas_service.dart';
+import 'services/voice_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -129,6 +130,13 @@ class AtlasHome extends StatefulWidget {
 class _AtlasHomeState extends State<AtlasHome> {
   final TextEditingController _commandController = TextEditingController();
 
+  /// Speech to text helper for dictating commands (issue CA-07). Created here
+  /// so its status callback can drive the listening indicator.
+  late final VoiceService _voiceService = VoiceService(
+    onStatusChanged: _handleVoiceStatus,
+  );
+  bool _isListening = false;
+
   @override
   void initState() {
     super.initState();
@@ -143,8 +151,54 @@ class _AtlasHomeState extends State<AtlasHome> {
 
   @override
   void dispose() {
+    _voiceService.stop();
     _commandController.dispose();
     super.dispose();
+  }
+
+  /// Keeps the listening indicator in sync with the recognizer, including when
+  /// it stops on its own after a pause.
+  void _handleVoiceStatus(bool listening) {
+    if (!mounted) return;
+    if (_isListening != listening) {
+      setState(() => _isListening = listening);
+    }
+  }
+
+  /// Toggles dictation. While listening, partial transcripts fill the field
+  /// live; the final transcript is left in place for the user to review and
+  /// submit as usual.
+  Future<void> _toggleListening() async {
+    if (_isListening) {
+      await _voiceService.stop();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+
+    final ready = await _voiceService.init();
+    if (!mounted) return;
+    if (!ready) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Voice input is unavailable. Check microphone permission.',
+            style: TextStyle(fontFamily: 'Courier'),
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isListening = true);
+    await _voiceService.startListening((transcript, isFinal) {
+      if (!mounted) return;
+      setState(() {
+        _commandController.text = transcript;
+        _commandController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _commandController.text.length),
+        );
+      });
+    });
   }
 
   Future<void> _openConnectionScreen() async {
@@ -247,6 +301,25 @@ class _AtlasHomeState extends State<AtlasHome> {
                                         ),
                                       ),
                                     ),
+                                    // Microphone toggle for voice dictation.
+                                    GestureDetector(
+                                      onTap: _toggleListening,
+                                      behavior: HitTestBehavior.opaque,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 10.0,
+                                        ),
+                                        child: Icon(
+                                          _isListening
+                                              ? Icons.mic
+                                              : Icons.mic_none,
+                                          size: 22,
+                                          color: _isListening
+                                              ? const Color(0xFFB00020)
+                                              : const Color(0xFF1A1A1A),
+                                        ),
+                                      ),
+                                    ),
                                     GestureDetector(
                                       onTap: _submitCommand,
                                       behavior: HitTestBehavior.opaque,
@@ -270,6 +343,12 @@ class _AtlasHomeState extends State<AtlasHome> {
                             height: 55,
                           ),
                         ),
+                        // Subtle listening indicator shown while dictating.
+                        if (_isListening)
+                          const Positioned(
+                            bottom: 2,
+                            child: _ListeningIndicator(),
+                          ),
                       ],
                     ),
                   ),
@@ -462,6 +541,65 @@ class _ProgressView extends StatelessWidget {
       case AtlasEventType.unknown:
         return 'ATLAS';
     }
+  }
+}
+
+/// A small pill with a gently pulsing red dot shown while the app is listening
+/// for dictation. Kept subtle so it does not fight the pixel-art aesthetic.
+class _ListeningIndicator extends StatefulWidget {
+  const _ListeningIndicator();
+
+  @override
+  State<_ListeningIndicator> createState() => _ListeningIndicatorState();
+}
+
+class _ListeningIndicatorState extends State<_ListeningIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xCC1A1A1A),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FadeTransition(
+            opacity: Tween<double>(begin: 0.35, end: 1.0).animate(_controller),
+            child: Container(
+              width: 9,
+              height: 9,
+              decoration: const BoxDecoration(
+                color: Color(0xFFB00020),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'Listening...',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Courier',
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
