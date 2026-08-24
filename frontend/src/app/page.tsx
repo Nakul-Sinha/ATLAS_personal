@@ -14,19 +14,15 @@ interface IndexedItem {
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  console.log("invoke called:", cmd, "isTauri:", isTauri);
   if (isTauri) {
     try {
       const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
-      const result = await tauriInvoke<T>(cmd, args);
-      console.log("Tauri invoke result:", result);
-      return result;
+      return await tauriInvoke<T>(cmd, args);
     } catch (e) {
       console.error("Tauri invoke error:", e);
       throw e;
     }
   }
-  console.log("Not in Tauri, returning empty array");
   return [] as unknown as T;
 }
 
@@ -35,67 +31,103 @@ async function listenEvent(event: string, handler: () => void) {
     const { listen } = await import("@tauri-apps/api/event");
     return listen(event, handler);
   }
+  return undefined;
+}
+
+async function hideWindow() {
+  if (isTauri) {
+    const { getCurrentWindow } = await import("@tauri-apps/api/window");
+    await getCurrentWindow().hide();
+  }
 }
 
 export default function Home() {
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<IndexedItem[]>([]);
-  const [filtered, setFiltered] = useState<IndexedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Load indexed items on mount
+  // Load indexed items, and refresh when background indexing completes.
   useEffect(() => {
-    async function loadItems() {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    async function refresh() {
       try {
-        console.log("Loading items from Tauri...");
         const result = await invoke<IndexedItem[]>("get_indexed_items");
-        console.log("Received items:", result?.length, result);
-        setItems(result || []);
-        setFiltered(result || []);
+        if (cancelled) return;
+        if (result && result.length > 0) {
+          setItems(result);
+          setLoading(false);
+        }
       } catch (e) {
         console.error("Failed to load items:", e);
-      } finally {
-        setLoading(false);
       }
     }
-    loadItems();
+
+    async function init() {
+      // The cache may already be populated on a fast machine.
+      await refresh();
+      // Indexing runs on a background thread; refresh when it signals ready.
+      unlisten = await listenEvent("index-ready", () => {
+        setLoading(false);
+        refresh();
+      });
+      // Fallback so we never spin forever if the event was missed.
+      setTimeout(() => {
+        if (!cancelled) setLoading(false);
+      }, 8000);
+    }
+
+    init();
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
   }, []);
 
   // Listen for focus-search event from Tauri (on hotkey toggle)
   useEffect(() => {
-    listenEvent("focus-search", () => {
-      inputRef.current?.focus();
-      setQuery("");
-    });
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      unlisten = await listenEvent("focus-search", () => {
+        inputRef.current?.focus();
+        setQuery("");
+        setShowSettings(false);
+      });
+    })();
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
-  // Filter items on query change
-  useEffect(() => {
-    if (query.trim() === "") {
-      setFiltered(items);
-    } else {
-      const q = query.toLowerCase();
-      setFiltered(
-        items.filter((item) => item.name.toLowerCase().includes(q))
-      );
-    }
-    setSelectedIndex(0);
-  }, [query, items]);
+  // Derive the filtered list during render (no effect, no cascading state).
+  const filtered =
+    query.trim() === ""
+      ? items
+      : items.filter((item) =>
+          item.name.toLowerCase().includes(query.toLowerCase())
+        );
 
   // Open the selected item
-  const openItem = useCallback(
-    async (item: IndexedItem) => {
-      try {
-        await invoke("open_item", { path: item.path });
-      } catch (e) {
-        console.error("Failed to open item:", e);
-      }
-    },
-    []
-  );
+  const openItem = useCallback(async (item: IndexedItem) => {
+    try {
+      await invoke("open_item", { path: item.path });
+    } catch (e) {
+      console.error("Failed to open item:", e);
+    }
+  }, []);
+
+  const quitApp = useCallback(async () => {
+    try {
+      await invoke("quit_app");
+    } catch (e) {
+      console.error("Failed to quit:", e);
+    }
+  }, []);
 
   // Keyboard navigation (horizontal layout)
   const handleKeyDown = useCallback(
@@ -110,14 +142,14 @@ export default function Home() {
         e.preventDefault();
         openItem(filtered[selectedIndex]);
       } else if (e.key === "Escape") {
-        if (isTauri) {
-          import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
-            getCurrentWindow().hide();
-          });
+        if (showSettings) {
+          setShowSettings(false);
+        } else {
+          hideWindow();
         }
       }
     },
-    [filtered, selectedIndex, openItem]
+    [filtered, selectedIndex, openItem, showSettings]
   );
 
   // Auto-scroll selected item into view
@@ -131,7 +163,6 @@ export default function Home() {
     }
   }, [selectedIndex]);
 
-  // Get display items (show all for horizontal scroll)
   const displayItems = filtered;
 
   return (
@@ -139,17 +170,24 @@ export default function Home() {
       className="w-full h-screen flex flex-col relative overflow-hidden"
       onKeyDown={handleKeyDown}
     >
-
       {/* Window Frame */}
       <div className="pixel-window flex-1 flex flex-col">
         {/* Title Bar */}
         <div className="pixel-titlebar">
           <span className="pixel-title">ATLAS</span>
           <div className="pixel-controls">
-            <button className="pixel-btn-settings" title="Settings">
+            <button
+              className="pixel-btn-settings"
+              title="Settings"
+              onClick={() => setShowSettings((s) => !s)}
+            >
               <span>⚙</span>
             </button>
-            <button className="pixel-btn-close" title="Close">
+            <button
+              className="pixel-btn-close"
+              title="Close (Esc)"
+              onClick={() => hideWindow()}
+            >
               <span>✕</span>
             </button>
           </div>
@@ -163,7 +201,10 @@ export default function Home() {
               ref={inputRef}
               type="text"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSelectedIndex(0);
+              }}
               placeholder="Search anything..."
               autoFocus
               className="pixel-search-input"
@@ -172,13 +213,10 @@ export default function Home() {
           </div>
 
           {/* Items Grid */}
-          <div
-            ref={listRef}
-            className="pixel-grid flex-1 overflow-auto"
-          >
+          <div ref={listRef} className="pixel-grid flex-1 overflow-auto">
             {loading ? (
               <div className="col-span-5 flex items-center justify-center h-24">
-                <span className="pixel-text pixel-loading">Loading...</span>
+                <span className="pixel-text pixel-loading">Indexing...</span>
               </div>
             ) : displayItems.length === 0 ? (
               <div className="col-span-5 flex items-center justify-center h-24">
@@ -189,14 +227,10 @@ export default function Home() {
                 <button
                   key={`${item.kind}-${item.path}`}
                   onClick={() => openItem(item)}
-                  className={`pixel-item ${selectedIndex === index ? 'selected' : ''}`}
+                  className={`pixel-item ${selectedIndex === index ? "selected" : ""}`}
                 >
                   <div className="pixel-item-icon">
-                    <img
-                      src="/folder.svg"
-                      alt={item.name}
-                      className="folder-icon"
-                    />
+                    <img src="/folder.svg" alt={item.name} className="folder-icon" />
                   </div>
                   <span className="pixel-item-name">{item.name}</span>
                 </button>
@@ -204,6 +238,37 @@ export default function Home() {
             )}
           </div>
         </div>
+
+        {/* Settings Panel */}
+        {showSettings && (
+          <div className="pixel-settings-overlay" onClick={() => setShowSettings(false)}>
+            <div className="pixel-settings-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="pixel-settings-title">Settings</div>
+              <div className="pixel-settings-row">
+                <span>Indexed items</span>
+                <span>{items.length}</span>
+              </div>
+              <div className="pixel-settings-row">
+                <span>Toggle launcher</span>
+                <span>Win + -</span>
+              </div>
+              <div className="pixel-settings-actions">
+                <button
+                  className="pixel-settings-btn"
+                  onClick={() => setShowSettings(false)}
+                >
+                  Close
+                </button>
+                <button
+                  className="pixel-settings-btn pixel-settings-btn-danger"
+                  onClick={() => quitApp()}
+                >
+                  Quit ATLAS
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -264,22 +264,13 @@ fn get_indexed_items() -> Vec<IndexedItem> {
 }
 
 #[tauri::command]
-fn search_items(query: String) -> Vec<IndexedItem> {
-    let q = query.to_lowercase();
-    let all = get_cached_items();
-
-    if q.is_empty() {
-        return all;
-    }
-
-    all.into_iter()
-        .filter(|item| item.name.to_lowercase().contains(&q))
-        .collect()
+fn open_item(path: String) -> Result<(), String> {
+    open::that(&path).map_err(|e| format!("Failed to open {}: {}", path, e))
 }
 
 #[tauri::command]
-fn open_item(path: String) -> Result<(), String> {
-    open::that(&path).map_err(|e| format!("Failed to open {}: {}", path, e))
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
 }
 
 fn toggle_window(app: &tauri::AppHandle) {
@@ -298,12 +289,19 @@ fn toggle_window(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Index files before starting the app
-    initialize_index();
-    
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .setup(|app| {
+            // Index files on a background thread so the window paints immediately.
+            // When indexing finishes, notify the UI so it can load the results.
+            let index_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                initialize_index();
+                if let Some(window) = index_handle.get_webview_window("main") {
+                    let _ = window.emit("index-ready", get_cached_items().len());
+                }
+            });
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -344,8 +342,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_indexed_items,
-            search_items,
-            open_item
+            open_item,
+            quit_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
