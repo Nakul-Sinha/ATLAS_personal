@@ -48,9 +48,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r ml/requirements-test.txt "ruff==0.8.4"
       - name: Lint
-        run: ruff check ml/config ml/perception ml/agent ml/memory ml/tests
+        run: ruff check ml/config ml/perception ml/agent ml/memory ml/actions ml/tests
       - name: Hermetic tests
-        run: pytest -q ml/tests
+        # Run from inside ml/tests so pytest's rootdir is the tests directory and
+        # it does not collect the ml package (whose __init__ pulls the GUI-only
+        # executor). conftest.py adds ml/ to sys.path for the imports.
+        working-directory: ml/tests
+        run: pytest -q
 
   frontend:
     name: Frontend (lint and build)
