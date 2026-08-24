@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <title>ATLAS: Autonomous Task Learning and Action System</title>
+  <meta name="description" content="ATLAS is a full-stack AI agent that sees your screen, understands intent, and takes action across desktop apps, browsers, and mobile.">
+  <!-- set a flag as early as possible so reveal animations only arm when JS is on -->
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230a0e14'/%3E%3Crect x='3' y='4' width='4' height='4' fill='%23f5b942'/%3E%3Crect x='9' y='4' width='4' height='4' fill='%23f5b942'/%3E%3Crect x='4' y='5' width='2' height='2' fill='%230a0e14'/%3E%3Crect x='10' y='5' width='2' height='2' fill='%230a0e14'/%3E%3Crect x='7' y='8' width='2' height='2' fill='%234dd0e1'/%3E%3C/svg%3E">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ===== Header ===== -->
+  <header class="site-header">
+    <nav class="nav" aria-label="Primary">
+      <a class="brand" href="#top">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24" role="img" aria-hidden="true">
+            <rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="6" y="7" width="4" height="4" fill="currentColor"/>
+            <rect x="14" y="7" width="4" height="4" fill="currentColor"/>
+            <rect x="11" y="13" width="2" height="2" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="brand-name">ATLAS</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#components">Components</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#principles">Principles</a></li>
+        <li><a class="nav-cta" href="https://github.com/Nakul-Sinha/ATLAS_personal" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main id="main">
+    <span id="top"></span>
+
+    <!-- ===== Hero ===== -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-grid" aria-hidden="true"></div>
+      <div class="hero-inner">
+        <div class="hero-copy reveal">
+          <p class="eyebrow">Autonomous Task Learning and Action System</p>
+          <h1 id="hero-title" class="hero-title">ATLAS</h1>
+          <p class="tagline">The agent that sees your screen, understands your intent, and takes action.</p>
+          <p class="lede">
+            A full-stack AI agent that operates real software the way a person does: across
+            desktop apps, browsers, and mobile, using only what appears on screen.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://github.com/Nakul-Sinha/ATLAS_personal" target="_blank" rel="noopener noreferrer">
+              View on GitHub
+              <span class="btn-arrow" aria-hidden="true">-&gt;</span>
+            </a>
+            <a class="btn btn-ghost" href="#how">See the loop</a>
+          </div>
+          <ul class="hero-badges" aria-label="Key traits">
+            <li>Runs locally</li>
+            <li>Vision-driven</li>
+            <li>Cross-platform</li>
+          </ul>
+        </div>
+
+        <div class="hero-art reveal" aria-hidden="true">
+          <!-- Geometric pixel-art owl mascot -->
+          <svg class="owl" viewBox="0 0 200 220" role="img" aria-label="Pixel-art owl mascot">
+            <defs>
+              <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="var(--accent)"/>
+                <stop offset="100%" stop-color="var(--accent-dark)"/>
+              </radialGradient>
+            </defs>
+            <!-- ear tufts -->
+            <rect x="40" y="18" width="22" height="22" class="owl-body"/>
+            <rect x="138" y="18" width="22" height="22" class="owl-body"/>
+            <!-- head -->
+            <rect x="30" y="34" width="140" height="96" rx="10" class="owl-body"/>
+            <!-- brow ridge -->
+            <rect x="42" y="48" width="52" height="12" class="owl-brow"/>
+            <rect x="106" y="48" width="52" height="12" class="owl-brow"/>
+            <!-- eye discs -->
+            <rect x="46" y="60" width="44" height="44" rx="6" class="owl-disc"/>
+            <rect x="110" y="60" width="44" height="44" rx="6" class="owl-disc"/>
+            <!-- eyes -->
+            <circle class="owl-eye" cx="68" cy="82" r="15" fill="url(#eyeGlow)"/>
+            <circle class="owl-eye" cx="132" cy="82" r="15" fill="url(#eyeGlow)"/>
+            <circle cx="68" cy="82" r="6" class="owl-pupil"/>
+            <circle cx="132" cy="82" r="6" class="owl-pupil"/>
+            <!-- beak -->
+            <polygon points="100,104 90,116 110,116" class="owl-beak"/>
+            <!-- body -->
+            <rect x="46" y="130" width="108" height="70" rx="12" class="owl-body"/>
+            <!-- chest pixels -->
+            <rect x="66" y="146" width="14" height="14" class="owl-chest"/>
+            <rect x="93" y="146" width="14" height="14" class="owl-chest"/>
+            <rect x="120" y="146" width="14" height="14" class="owl-chest"/>
+            <rect x="79" y="164" width="14" height="14" class="owl-chest"/>
+            <rect x="107" y="164" width="14" height="14" class="owl-chest"/>
+            <!-- feet -->
+            <rect x="72" y="200" width="18" height="8" rx="2" class="owl-feet"/>
+            <rect x="110" y="200" width="18" height="8" rx="2" class="owl-feet"/>
+          </svg>
+          <div class="scan-line" aria-hidden="true"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Components ===== -->
+    <section id="components" class="section" aria-labelledby="components-title">
+      <div class="section-head reveal">
+        <p class="kicker">The system</p>
+        <h2 id="components-title">Five components, one agent</h2>
+        <p class="section-sub">
+          ATLAS is a full stack: perception and reasoning at the core, with a desktop launcher,
+          a relay backend, and a mobile companion wrapped around it.
+        </p>
+      </div>
+
+      <ul class="cards" role="list">
+        <li class="card reveal">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28"><rect x="3" y="4" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/><circle cx="8" cy="10.5" r="1.4" fill="currentColor"/><circle cx="16" cy="10.5" r="1.4" fill="currentColor"/></svg>
+          </div>
+          <p class="card-tag">ml/</p>
+          <h3>ML Pipeline</h3>
+          <p>
+            A vision-driven desktop agent that operates any app using only screen pixels. It runs
+            a perceive, understand, plan, act, verify loop with local models: Ollama (llama3.2 and
+            llava) and EasyOCR.
+          </p>
+        </li>
+
+        <li class="card reveal">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+          </div>
+          <p class="card-tag">ml/mcp/</p>
+          <h3>MCP Browser Agent</h3>
+          <p>
+            Autonomous web automation through Playwright MCP and an LLM action loop, driving a real
+            Chrome browser to complete tasks on live sites.
+          </p>
+        </li>
+
+        <li class="card reveal">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28"><rect x="3" y="5" width="18" height="4" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="15" width="18" height="4" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="7" cy="7" r="1" fill="currentColor"/><circle cx="7" cy="17" r="1" fill="currentColor"/></svg>
+          </div>
+          <p class="card-tag">backend/</p>
+          <h3>Backend</h3>
+          <p>
+            A FastAPI WebSocket relay that bridges the mobile app to the agent, orchestrating
+            commands and streaming progress back in real time.
+          </p>
+        </li>
+
+        <li class="card reveal">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M7 20h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M9 9h6M9 12h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+          <p class="card-tag">frontend/</p>
+          <h3>Frontend</h3>
+          <p>
+            A Tauri v2 and Next.js desktop launcher, Spotlight style, that indexes and opens local
+            files and apps. Toggle it any time with Win and minus.
+          </p>
+        </li>
+
+        <li class="card reveal">
+          <div class="card-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28"><rect x="6" y="2.5" width="12" height="19" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10.5 5.5h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="18" r="1.1" fill="currentColor"/></svg>
+          </div>
+          <p class="card-tag">companion-app/</p>
+          <h3>Companion App</h3>
+          <p>
+            A Flutter mobile client to send voice or text commands and watch progress live as the
+            agent works on your machine.
+          </p>
+        </li>
+
+        <li class="card card-accent reveal">
+          <p class="card-tag">the idea</p>
+          <h3>One intent, end to end</h3>
+          <p>
+            Speak or type a goal on your phone. ATLAS perceives your screen, decides what to do, acts
+            with mouse and keyboard, and verifies the result, then reports back.
+          </p>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ===== How it works ===== -->
+    <section id="how" class="section section-alt" aria-labelledby="how-title">
+      <div class="section-head reveal">
+        <p class="kicker">How it works</p>
+        <h2 id="how-title">The perception loop</h2>
+        <p class="section-sub">
+          Every action follows the same disciplined cycle. The agent never assumes: it looks, reasons,
+          acts, and then checks the screen again before moving on.
+        </p>
+      </div>
+
+      <ol class="loop" role="list">
+        <li class="loop-step reveal">
+          <span class="loop-num">01</span>
+          <h3>Perceive</h3>
+          <p>Capture the screen and read it with OCR to locate text, controls, and layout.</p>
+        </li>
+        <li class="loop-step reveal">
+          <span class="loop-num">02</span>
+          <h3>Understand</h3>
+          <p>Interpret what is on screen and how it relates to the current goal.</p>
+        </li>
+        <li class="loop-step reveal">
+          <span class="loop-num">03</span>
+          <h3>Plan</h3>
+          <p>Decide the next single action that moves the task forward.</p>
+        </li>
+        <li class="loop-step reveal">
+          <span class="loop-num">04</span>
+          <h3>Act</h3>
+          <p>Execute it with real mouse and keyboard input, never hardcoded coordinates.</p>
+        </li>
+        <li class="loop-step reveal">
+          <span class="loop-num">05</span>
+          <h3>Verify</h3>
+          <p>Look again to confirm the action worked, then loop or recover.</p>
+        </li>
+      </ol>
+      <p class="loop-caption reveal">The loop repeats until the goal is reached or the agent needs help.</p>
+    </section>
+
+    <!-- ===== Principles ===== -->
+    <section id="principles" class="section" aria-labelledby="principles-title">
+      <div class="section-head reveal">
+        <p class="kicker">Design principles</p>
+        <h2 id="principles-title">Rules the agent lives by</h2>
+      </div>
+
+      <ul class="principles" role="list">
+        <li class="principle reveal">
+          <span class="principle-index" aria-hidden="true">*</span>
+          <h3>The screen is the only truth</h3>
+          <p>ATLAS reads real pixels, not an app's internal state, so it works with software it has never seen.</p>
+        </li>
+        <li class="principle reveal">
+          <span class="principle-index" aria-hidden="true">*</span>
+          <h3>Never trust one perception pass</h3>
+          <p>Perception can be wrong. The agent corroborates before committing to an action.</p>
+        </li>
+        <li class="principle reveal">
+          <span class="principle-index" aria-hidden="true">*</span>
+          <h3>Always verify visually</h3>
+          <p>After acting, it looks again to confirm the outcome instead of assuming success.</p>
+        </li>
+        <li class="principle reveal">
+          <span class="principle-index" aria-hidden="true">*</span>
+          <h3>Never hardcode coordinates</h3>
+          <p>Targets are found on screen every time, so the agent adapts to any layout or resolution.</p>
+        </li>
+      </ul>
+    </section>
+
+    <!-- ===== CTA ===== -->
+    <section class="cta reveal" aria-labelledby="cta-title">
+      <h2 id="cta-title">Explore the source</h2>
+      <p>ATLAS is built in the open. Dig into the pipeline, the browser agent, and the apps.</p>
+      <a class="btn btn-primary" href="https://github.com/Nakul-Sinha/ATLAS_personal" target="_blank" rel="noopener noreferrer">
+        View on GitHub
+        <span class="btn-arrow" aria-hidden="true">-&gt;</span>
+      </a>
+    </section>
+  </main>
+
+  <!-- ===== Footer ===== -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" role="img" aria-hidden="true">
+            <rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="6" y="7" width="4" height="4" fill="currentColor"/>
+            <rect x="14" y="7" width="4" height="4" fill="currentColor"/>
+            <rect x="11" y="13" width="2" height="2" fill="currentColor"/>
+          </svg>
+        </span>
+        <span>ATLAS</span>
+      </div>
+      <p class="footer-note">Autonomous Task Learning and Action System.</p>
+      <a href="https://github.com/Nakul-Sinha/ATLAS_personal" target="_blank" rel="noopener noreferrer">github.com/Nakul-Sinha/ATLAS_personal</a>
+    </div>
+  </footer>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
