@@ -1,0 +1,14 @@
+# Light dependency set for running the hermetic ml/tests suite in CI.
+#
+# The tests import config, memory, perception (fusion, screen-frame math, modal
+# detection, window state) but never load the heavy runtime models, so the big
+# packages (easyocr, torch, pyautogui) are not needed here. mss, easyocr, torch,
+# and requests are all imported lazily by the runtime code.
+
+numpy>=1.24.0
+opencv-python-headless>=4.8.0
+pillow>=10.0.0
+pydantic>=2.0.0
+loguru>=0.7.0
+python-dotenv>=1.0.0
+pytest>=8.0
