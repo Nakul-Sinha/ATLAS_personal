@@ -71,19 +71,30 @@ class LLMModel:
         self._model = None
         
     def load(self) -> None:
-        """Initialize the local LLM via llama-cpp-python."""
+        """
+        Initialize the configured LLM backend.
+
+        The default Ollama backend has nothing to load locally: generation talks
+        to the Ollama server over HTTP. Only the llama.cpp fallback needs a local
+        GGUF model file, so we do not touch llama_cpp (or require the model file)
+        unless that backend is selected.
+        """
+        if self.config.backend == "ollama":
+            logger.info(f"LLM backend: ollama ({self.config.ollama_model})")
+            return
+
         try:
             from llama_cpp import Llama
-            
+
             self._model = Llama(
                 model_path=self.config.model_path,
                 n_ctx=self.config.n_ctx,
                 n_gpu_layers=self.config.n_gpu_layers,
                 verbose=False,
             )
-            
+
             logger.info(f"LLM loaded: {self.config.model_path}")
-            
+
         except Exception as e:
             logger.error(f"Failed to load LLM: {e}")
             raise
