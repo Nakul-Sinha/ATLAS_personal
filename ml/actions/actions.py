@@ -5,7 +5,6 @@ Atomic action types for OS-level interaction.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
 from abc import ABC, abstractmethod
 
 
