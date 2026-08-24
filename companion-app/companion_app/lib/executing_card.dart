@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
-
+/// Presentational card that shows the owl, a pixel-art message box, and a
+/// status line. Fed a [message] (the current detail) and an optional
+/// [statusLabel] such as "Executing...", "Done", or "Error".
 class ExecutingCard extends StatelessWidget {
   final String message;
+  final String statusLabel;
 
   const ExecutingCard({
     super.key,
     required this.message,
+    this.statusLabel = 'Executing...',
   });
 
   @override
@@ -15,9 +19,7 @@ class ExecutingCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Your pixel-art / svg / image
-          
-          // Owl image, moved up
+          // Owl image, moved up so it perches on the message box.
           Transform.translate(
             offset: const Offset(0, -12),
             child: Image.asset(
@@ -27,7 +29,7 @@ class ExecutingCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // Message box with pixel-art background
+          // Message box with pixel-art background.
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -54,7 +56,7 @@ class ExecutingCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const Text('Executing...'),
+          Text(statusLabel),
         ],
       ),
     );
