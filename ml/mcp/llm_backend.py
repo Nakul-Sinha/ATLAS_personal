@@ -1,9 +1,9 @@
 """
-ATLAS MCP Agent — Modular LLM Backend
+ATLAS MCP Agent - Modular LLM Backend
 ======================================
 
 Provides a unified interface for LLM calls with three backends:
-  1. Google Gemini API (native SDK — primary)
+  1. Google Gemini API (native SDK - primary)
   2. OpenAI-compatible API (works with OpenAI, Groq, Together, Ollama, etc.)
   3. Local llama-cpp-python (fully offline)
 
@@ -26,7 +26,7 @@ console = Console()
 
 
 class LLMBackend(ABC):
-    """Abstract LLM interface — swap backends without changing agent code."""
+    """Abstract LLM interface - swap backends without changing agent code."""
     
     @abstractmethod
     def chat(
@@ -83,7 +83,7 @@ class GeminiBackend(LLMBackend):
             fn = tool["function"]
             params = fn.get("parameters", {})
             
-            # Clean up schema for Gemini — it's stricter about JSON Schema
+            # Clean up schema for Gemini - it's stricter about JSON Schema
             clean_params = self._clean_schema_for_gemini(params)
             
             declarations.append(types.FunctionDeclaration(
@@ -222,11 +222,11 @@ class GeminiBackend(LLMBackend):
             except Exception as e:
                 err_str = str(e)
                 if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    # quota=0 means the free tier is disabled entirely — retrying is pointless
+                    # quota=0 means the free tier is disabled entirely - retrying is pointless
                     if "limit: 0" in err_str:
                         raise RuntimeError(
                             "\n[!] Gemini free tier quota is 0 for your GCP project.\n"
-                            "This is NOT a transient rate limit — retrying won't help.\n\n"
+                            "This is NOT a transient rate limit - retrying won't help.\n\n"
                             "Fix options:\n"
                             "  1. Enable billing on your GCP project at console.cloud.google.com\n"
                             "     (even $0 billing unlocks the free tier quota)\n\n"
@@ -238,7 +238,7 @@ class GeminiBackend(LLMBackend):
                             "       OPENAI_MODEL=google/gemini-2.0-flash-exp:free\n"
                         ) from e
                     
-                    # Transient rate limit — extract server-suggested delay and retry
+                    # Transient rate limit - extract server-suggested delay and retry
                     delay_match = _re.search(r'retry\w* in ([\d.]+)', err_str, _re.IGNORECASE)
                     wait = float(delay_match.group(1)) + 2 if delay_match else min(15 * (2 ** attempt), 120)
                     
@@ -551,14 +551,17 @@ def create_llm(config: MCPConfig) -> LLMBackend:
         if not config.gemini.api_key:
             raise ValueError(
                 "LLM_BACKEND=gemini but GEMINI_API_KEY is not set.\n"
-                "Set it in ml/mcp/.env or as an environment variable."
+                "Set GEMINI_API_KEY in ml/mcp/.env (copy it from ml/mcp/.env.example)\n"
+                "or export it as an environment variable."
             )
         return GeminiBackend(config.gemini)
     elif config.llm_backend == "openai":
         if not config.openai.api_key:
             raise ValueError(
                 "LLM_BACKEND=openai but OPENAI_API_KEY is not set.\n"
-                "Set it in ml/mcp/.env or as an environment variable."
+                "Set OPENAI_API_KEY in ml/mcp/.env (copy it from ml/mcp/.env.example)\n"
+                "or export it as an environment variable. For OpenRouter also set\n"
+                "OPENAI_BASE_URL=https://openrouter.ai/api/v1 and an OPENAI_MODEL."
             )
         return OpenAIBackend(config.openai)
     elif config.llm_backend == "llama":

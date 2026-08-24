@@ -1,14 +1,16 @@
 """
-ATLAS MCP Agent — Configuration
+ATLAS MCP Agent - Configuration
 ================================
 
 Loads settings from environment variables or .env file.
 Supports three LLM backends:
-  1. Gemini API (Google's Generative AI — primary)
+  1. Gemini API (Google's Generative AI - primary)
   2. OpenAI-compatible API (OpenAI, Groq, Together, local vLLM/Ollama, etc.)
   3. Local llama.cpp model (fully offline)
 
 Set LLM_BACKEND=gemini, openai, or llama in your .env file.
+The default backend is "openai" (see .env.example), which gives the clearest
+setup error when no API key is configured.
 """
 
 import os
@@ -55,8 +57,10 @@ class LlamaConfig(BaseModel):
 
 class MCPConfig(BaseModel):
     """Master config for the MCP agent."""
+    # Default to "openai" to stay consistent with .env.example. When unset,
+    # this backend produces the clearest "set OPENAI_API_KEY" error.
     llm_backend: Literal["gemini", "openai", "llama"] = Field(
-        default_factory=lambda: os.getenv("LLM_BACKEND", "gemini")
+        default_factory=lambda: os.getenv("LLM_BACKEND", "openai")
     )
     gemini: GeminiConfig = Field(default_factory=GeminiConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
@@ -66,8 +70,15 @@ class MCPConfig(BaseModel):
     playwright_headless: bool = Field(
         default_factory=lambda: os.getenv("PLAYWRIGHT_HEADLESS", "false").lower() == "true"
     )
+
+    # Chrome DevTools Protocol (CDP) debugging port used when CHROME_PROFILE=true.
+    # Chrome is launched with --remote-debugging-port and Playwright MCP connects
+    # to it via --cdp-endpoint on this port.
+    cdp_port: int = Field(
+        default_factory=lambda: int(os.getenv("CDP_PORT", "9222"))
+    )
     
-    # Chrome profile — use your real browser with logged-in sessions
+    # Chrome profile - use your real browser with logged-in sessions
     # Set CHROME_PROFILE=true and point CHROME_USER_DATA_DIR to your
     # Chrome user data directory (defaults to the standard Windows path).
     # The 'Default' profile is used automatically. For a different profile

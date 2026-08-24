@@ -1,16 +1,25 @@
-# ATLAS MCP Agent — Self-contained dependencies
+# ATLAS MCP Agent - core dependencies
 # Install: pip install -r requirements.txt
+#
+# NON-PYTHON PREREQUISITES (not installable via pip):
+#   - Node.js + npx: the agent launches the browser MCP server by running
+#     "npx @playwright/mcp@latest". Install Node.js from https://nodejs.org
+#     and confirm "npx --version" works before running the agent.
+#   - Google Chrome: required only when CHROME_PROFILE=true (CDP profile mode).
+#
+# The @playwright/mcp package is pulled at runtime by npx and is pinned to
+# @latest on purpose so it tracks the current Playwright MCP release. To pin a
+# specific version, edit the "@playwright/mcp@latest" string in browser_agent.py
+# and test_connection.py.
+#
+# For the optional local llama backend, also install requirements-llama.txt.
 
-# MCP protocol
+# MCP protocol (browser tools are served by the Node @playwright/mcp process)
 mcp[cli]>=1.0.0
 
-# LLM backends (modular — use any combination)
-google-genai>=1.0.0      # Gemini API (primary)
-openai>=1.30.0           # OpenAI / any OpenAI-compatible API
-llama-cpp-python>=0.2.0  # Local models (optional, for offline)
-
-# Browser automation
-playwright>=1.40.0
+# LLM backends for gemini/openai (use either)
+google-genai>=1.0.0      # Gemini API backend
+openai>=1.30.0           # OpenAI / any OpenAI-compatible API (OpenRouter, etc.)
 
 # Utilities
 httpx>=0.27.0

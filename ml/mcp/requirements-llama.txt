@@ -1,0 +1,12 @@
+# ATLAS MCP Agent - optional local llama backend
+# Install: pip install -r requirements-llama.txt
+#
+# Only needed when LLM_BACKEND=llama (fully offline, local GGUF model).
+# This is a heavyweight source build (it compiles native code and may need a
+# C/C++ toolchain, and CUDA/Metal for GPU), so it is kept out of the core
+# requirements.txt. The gemini and openai backends do NOT need this.
+#
+# llm_backend.py imports llama_cpp lazily, so the agent runs fine without this
+# package installed as long as you do not select the llama backend.
+
+llama-cpp-python>=0.2.0
