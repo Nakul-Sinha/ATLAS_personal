@@ -48,7 +48,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r ml/requirements-test.txt "ruff==0.8.4"
       - name: Lint
-        run: ruff check ml/config ml/perception ml/agent ml/memory ml/actions ml/tests
+        run: ruff check ml/config ml/perception ml/agent ml/memory ml/actions ml/models ml/tests
       - name: Hermetic tests
         # Run from inside ml/tests so pytest's rootdir is the tests directory and
         # it does not collect the ml package (whose __init__ pulls the GUI-only

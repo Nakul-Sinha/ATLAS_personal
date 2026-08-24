@@ -8,7 +8,7 @@ Handles visual understanding of screenshots:
 - Semantic descriptions of screen regions
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Any
 from dataclasses import dataclass
 from collections import OrderedDict
 import numpy as np
@@ -329,7 +329,7 @@ If not found, respond with: {{"found": false}}"""
             if start != -1 and end > start:
                 data = json.loads(response[start:end])
                 
-                if data.get("found") == False:
+                if not data.get("found"):
                     return None
                     
                 return UIRegion(
