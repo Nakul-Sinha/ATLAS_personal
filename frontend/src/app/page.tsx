@@ -13,6 +13,7 @@ interface IndexedItem {
 
 const HOST_STORAGE_KEY = "atlas.agent.host";
 const PORT_STORAGE_KEY = "atlas.agent.port";
+const TOKEN_STORAGE_KEY = "atlas.agent.token";
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = "8000";
 
@@ -43,6 +44,11 @@ function formatEvent(evt: AgentEvent): string {
     return evt.detail ? `${head}${head ? ": " : ""}${evt.detail}` : head || "progress";
   }
   if (evt.kind === "result") {
+    if (evt.plan && evt.plan.length > 0) {
+      const steps = evt.plan.map((s, i) => `  ${i + 1}. ${s}`).join("\n");
+      const head = evt.detail ? `PLAN: ${evt.detail}` : "PLAN (dry run)";
+      return `${head}\n${steps}`;
+    }
     const label = evt.success === false ? "FAILED" : "DONE";
     return evt.detail ? `${label}: ${evt.detail}` : label;
   }
@@ -93,8 +99,6 @@ export default function Home() {
   const listRef = useRef<HTMLDivElement>(null);
 
   // Agent command console state.
-  const agent = useAgentClient();
-  const [showConsole, setShowConsole] = useState(false);
   const [command, setCommand] = useState("");
   const [agentHost, setAgentHost] = useState<string>(() =>
     readStored(HOST_STORAGE_KEY, DEFAULT_HOST)
@@ -102,6 +106,13 @@ export default function Home() {
   const [agentPort, setAgentPort] = useState<string>(() =>
     readStored(PORT_STORAGE_KEY, DEFAULT_PORT)
   );
+  // Optional access token, persisted next to host/port. Read lazily so the
+  // static export prerender (no window) never touches localStorage.
+  const [agentToken, setAgentToken] = useState<string>(() =>
+    readStored(TOKEN_STORAGE_KEY, "")
+  );
+  const agent = useAgentClient(agentToken);
+  const [showConsole, setShowConsole] = useState(false);
   const commandRef = useRef<HTMLInputElement>(null);
   const feedEndRef = useRef<HTMLDivElement>(null);
 
@@ -113,6 +124,11 @@ export default function Home() {
   const updatePort = useCallback((value: string) => {
     setAgentPort(value);
     writeStored(PORT_STORAGE_KEY, value);
+  }, []);
+
+  const updateToken = useCallback((value: string) => {
+    setAgentToken(value);
+    writeStored(TOKEN_STORAGE_KEY, value);
   }, []);
 
   const openConsole = useCallback(() => {
@@ -134,6 +150,14 @@ export default function Home() {
     if (text === "") return;
     agent.sendCommand(text, agentHost, agentPort);
     setCommand("");
+  }, [agent, command, agentHost, agentPort]);
+
+  // Dry run: ask the backend for a plan without executing. The command text is
+  // kept so the user can review the plan and then Send the same command.
+  const previewCurrentCommand = useCallback(() => {
+    const text = command.trim();
+    if (text === "") return;
+    agent.sendPlan(text, agentHost, agentPort);
   }, [agent, command, agentHost, agentPort]);
 
   // Load indexed items, and refresh when background indexing completes.
@@ -434,6 +458,19 @@ export default function Home() {
                         ? "checking..."
                         : "check"}
                 </button>
+                <label className="pixel-console-field pixel-console-token">
+                  <span>Access token</span>
+                  <input
+                    className="pixel-console-config-input pixel-console-token-input"
+                    type="password"
+                    value={agentToken}
+                    onChange={(e) => updateToken(e.target.value)}
+                    onKeyDown={(e) => e.stopPropagation()}
+                    placeholder="optional"
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </label>
               </div>
 
               {/* Live event feed */}
@@ -481,6 +518,13 @@ export default function Home() {
                   onClick={sendCurrentCommand}
                 >
                   Send
+                </button>
+                <button
+                  className="pixel-console-btn pixel-console-btn-preview"
+                  onClick={previewCurrentCommand}
+                  title="Preview the plan without executing (dry run)"
+                >
+                  Preview
                 </button>
                 <button
                   className="pixel-console-btn pixel-console-btn-stop"

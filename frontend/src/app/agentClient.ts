@@ -29,7 +29,15 @@ export interface AgentEvent {
   detail?: string;
   message?: string;
   success?: boolean;
+  plan?: string[];
   ts: number;
+}
+
+// A message queued while the socket is not yet open. Preserving the type lets
+// a preview stay a preview (and a command stay a command) once we flush.
+interface PendingMessage {
+  type: "command" | "plan";
+  command: string;
 }
 
 interface Target {
@@ -57,11 +65,20 @@ function healthUrl(t: Target): string {
   return `http://${t.host}:${t.port}/health`;
 }
 
+// Extract a plan (dry-run) step list from a message field, keeping only the
+// string entries. Returns undefined when there is nothing plan-shaped to show.
+function parsePlan(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const steps = value.filter((s): s is string => typeof s === "string");
+  return steps.length > 0 ? steps : undefined;
+}
+
 export interface UseAgentClient {
   connectionState: ConnectionState;
   events: AgentEvent[];
   health: HealthStatus;
   sendCommand: (command: string, host: string, port: string) => void;
+  sendPlan: (command: string, host: string, port: string) => void;
   stop: () => void;
   checkHealth: (host: string, port: string) => void;
   disconnect: () => void;
@@ -72,7 +89,7 @@ export interface UseAgentClient {
 // WebSocket API only, so it runs unchanged inside the Tauri webview and in a
 // normal browser. All connection failures are contained here: nothing thrown
 // from a socket handler is allowed to reach the React tree.
-export function useAgentClient(): UseAgentClient {
+export function useAgentClient(token: string = ""): UseAgentClient {
   const [connectionState, setConnectionState] =
     useState<ConnectionState>("disconnected");
   const [events, setEvents] = useState<AgentEvent[]>([]);
@@ -80,8 +97,11 @@ export function useAgentClient(): UseAgentClient {
 
   const wsRef = useRef<WebSocket | null>(null);
   const targetRef = useRef<Target | null>(null);
-  const pendingRef = useRef<string[]>([]);
+  const pendingRef = useRef<PendingMessage[]>([]);
   const idRef = useRef(0);
+  // Keep the latest token in a ref so the socket "open" handler reads the
+  // current value without rebuilding connect() (which would drop the socket).
+  const tokenRef = useRef(token);
   const shouldConnectRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -136,6 +156,15 @@ export function useAgentClient(): UseAgentClient {
           kind: "result",
           success: typeof msg.success === "boolean" ? msg.success : undefined,
           detail: typeof msg.detail === "string" ? msg.detail : undefined,
+          plan: parsePlan(msg.plan),
+        });
+      } else if (type === "plan") {
+        // Dry-run preview response: a result-shaped message carrying the plan.
+        pushEvent({
+          kind: "result",
+          detail:
+            typeof msg.detail === "string" ? msg.detail : "Preview (dry run)",
+          plan: parsePlan(msg.plan),
         });
       } else if (type === "error") {
         pushEvent({
@@ -187,11 +216,21 @@ export function useAgentClient(): UseAgentClient {
         if (wsRef.current !== ws) return;
         reconnectAttemptsRef.current = 0;
         setConnectionState("connected");
+        // When auth is required the token must be the first message on the
+        // wire, ahead of any queued command or preview.
+        const authToken = tokenRef.current.trim();
+        if (authToken !== "") {
+          try {
+            ws.send(JSON.stringify({ type: "auth", token: authToken }));
+          } catch {
+            // Ignore: a failed send surfaces via the close handler.
+          }
+        }
         const queued = pendingRef.current;
         pendingRef.current = [];
-        for (const cmd of queued) {
+        for (const msg of queued) {
           try {
-            ws.send(JSON.stringify({ type: "command", command: cmd }));
+            ws.send(JSON.stringify(msg));
           } catch {
             // Ignore: a failed send surfaces via the close handler.
           }
@@ -245,6 +284,12 @@ export function useAgentClient(): UseAgentClient {
     connectRef.current = connect;
   }, [connect]);
 
+  // Mirror the latest token into a ref so a reconnect's "open" handler always
+  // authenticates with the current value. Ref-only, so it triggers no render.
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+
   const sendCommand = useCallback(
     (command: string, host: string, port: string) => {
       const text = command.trim();
@@ -269,7 +314,39 @@ export function useAgentClient(): UseAgentClient {
       }
 
       // Not connected (or the target changed): queue and open a socket.
-      pendingRef.current.push(text);
+      pendingRef.current.push({ type: "command", command: text });
+      connect(target);
+    },
+    [connect, pushEvent]
+  );
+
+  // Preview a command without executing it. Mirrors sendCommand but emits a
+  // "plan" message so the backend returns its dry-run plan instead of running.
+  const sendPlan = useCallback(
+    (command: string, host: string, port: string) => {
+      const text = command.trim();
+      if (text === "") return;
+      const target = normalizeTarget(host, port);
+      pushEvent({ kind: "info", detail: `> (preview) ${text}` });
+
+      const ws = wsRef.current;
+      const current = targetRef.current;
+      const sameTarget =
+        current !== null &&
+        current.host === target.host &&
+        current.port === target.port;
+
+      if (ws && ws.readyState === WebSocket.OPEN && sameTarget) {
+        try {
+          ws.send(JSON.stringify({ type: "plan", command: text }));
+        } catch (e) {
+          pushEvent({ kind: "error", message: `Send failed: ${String(e)}` });
+        }
+        return;
+      }
+
+      // Not connected (or the target changed): queue and open a socket.
+      pendingRef.current.push({ type: "plan", command: text });
       connect(target);
     },
     [connect, pushEvent]
@@ -353,6 +430,7 @@ export function useAgentClient(): UseAgentClient {
     events,
     health,
     sendCommand,
+    sendPlan,
     stop,
     checkHealth,
     disconnect,
