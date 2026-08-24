@@ -1,35 +1,24 @@
-/* ATLAS landing page: tiny progressive enhancement.
-   The page is fully usable without this file. */
+// Optional progressive enhancement: a gentle reveal for the card.
+// The page is fully visible without JavaScript (the .js gate handles that).
 (function () {
   "use strict";
 
-  var reduceMotion =
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var targets = document.querySelectorAll(".reveal");
 
-  var reveals = document.querySelectorAll(".reveal");
-
-  // If motion is reduced or IntersectionObserver is missing, just show everything.
-  if (reduceMotion || !("IntersectionObserver" in window)) {
-    reveals.forEach(function (el) {
-      el.classList.add("is-visible");
-    });
+  if (reduce || !("IntersectionObserver" in window)) {
+    targets.forEach(function (el) { el.classList.add("is-visible"); });
     return;
   }
 
-  var observer = new IntersectionObserver(
-    function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible");
-          observer.unobserve(entry.target);
-        }
-      });
-    },
-    { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
-  );
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
 
-  reveals.forEach(function (el) {
-    observer.observe(el);
-  });
+  targets.forEach(function (el) { io.observe(el); });
 })();
