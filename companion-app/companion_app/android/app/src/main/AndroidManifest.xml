@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Required to reach the ATLAS backend over the local network. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Required for voice input (issue CA-07) so speech can be captured. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="companion_app"
         android:name="${applicationName}"
@@ -43,6 +45,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Required so the speech_to_text plugin can find a speech
+             recognition service on Android 11 (API 30) and above. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

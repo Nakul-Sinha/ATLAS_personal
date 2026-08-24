@@ -41,6 +41,11 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.3.2
 
+  # Voice input (issue CA-07): on device speech to text plus the runtime
+  # microphone permission it needs.
+  speech_to_text: ^7.0.0
+  permission_handler: ^11.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
