@@ -1,18 +1,21 @@
-# ATLAS Landing Page
+# ATLAS landing page
 
-A self-contained static landing page for ATLAS (Autonomous Task Learning and Action System), a full-stack AI agent that sees your screen, understands intent, and takes action across desktop apps, browsers, and mobile. It is plain HTML and CSS with one small vanilla JavaScript file for scroll reveals, so there is no build step and no external network dependency.
+A minimal, single-screen landing page: one frosted-glass card over a dark, moody
+aurora background with fine film grain. Short by design; the full details live in
+the repository README.
+
+It is fully self-contained static HTML and CSS with a tiny optional script. No
+build step, no external requests, no remote fonts or images (the mark and grain
+are inline SVG).
 
 ## Deploy
 
-Pick whichever is easiest:
+- Open `index.html` directly in a browser, or
+- Serve the folder with any static server:
 
-- **Open directly:** double-click `index.html` to view it in any browser.
-- **Serve the folder:** from inside `landing-page/`, run a static server, for example `python -m http.server 8000`, then visit `http://localhost:8000`.
-- **GitHub Pages:** in the repository settings, enable Pages and point it at this `landing-page/` folder (or copy its contents to the branch or folder Pages serves). The included `.nojekyll` file tells Pages to serve the files verbatim.
+  ```bash
+  python -m http.server 8000
+  ```
 
-## Files
-
-- `index.html` : page markup and the inline SVG owl mark.
-- `styles.css` : all styling, dark theme with a light-scheme fallback and a reduced-motion guard.
-- `script.js` : optional scroll-reveal enhancement; the page works fully without it.
-- `.nojekyll` : ensures GitHub Pages serves the files as-is.
+- Or enable GitHub Pages pointing at this folder. A `.nojekyll` file is included so
+  Pages serves it verbatim.
