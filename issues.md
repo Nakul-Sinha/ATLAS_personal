@@ -116,4 +116,16 @@ delivered as reviewed code plus CI wiring rather than live-verified runs:
 - Voice input on a physical device (CA-07).
 
 These are wired into CI where a hosted runner can build them, and documented so a
-maintainer with the hardware can validate.
+maintainer with the hardware can validate. They are tracked as GitHub issues for
+follow-up on real hardware:
+
+- End-to-end GUI run on a real Windows desktop (#24)
+- Install and run the packaged desktop app (#25)
+- Build and test the companion APK on a device (#26)
+- Multi-monitor and high-DPI validation (#27)
+- Companion app iOS support (#28)
+- Backend real-mode and integration tests (#29)
+- Pin the MCP browser server version (#30)
+- Cut and verify the v0.1.0 release (#31)
+
+See `phases.md` Phase 10 for how these gate a full product release.

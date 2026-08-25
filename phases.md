@@ -130,6 +130,51 @@ Resolves: IN-02, IN-03, IN-04, and doc items from other phases.
 
 Verification: workflows valid; compose config valid; docs reviewed against the tree.
 
+## Phase 9 - Shippability hardening  (DONE)
+
+Found by running the real paths, not just CI. All merged and verified.
+
+- Fixed the default Ollama backend so a fresh install runs (it no longer requires a
+  local llama.cpp model file).
+- Made the backend actually reach the real agent: the ml package and the backend both
+  have a `config` module, so in-process imports collided and real mode silently fell back
+  to mock. The agent now runs as an isolated subprocess (`ml/agent_runner.py`) with
+  `cwd=ml/`; verified live that it streams a real plan from Ollama.
+- Added a safe plan (dry run) mode: preview what the agent would do without executing OS
+  input. Wired through the backend, the companion app, and the launcher console.
+- Added optional shared-token auth on the command channel, wired through both clients.
+- Implemented the remaining NON-CRITICAL robustness items (error taxonomy, typing
+  buffering, multi-app switching, VLM cache, icon matching) and the OCR+VLM
+  cross-validation opt-in.
+- Added voice input and LAN auto-discovery to the companion app.
+- Wired the launcher into the agent (a command console over `/ws`).
+- Added a release workflow, a CHANGELOG, aligned versions, and widened lint coverage.
+
+Verification: backend and ml suites green; live Ollama reasoning and plan streaming
+confirmed; a clean virtualenv installs the backend from `requirements.txt`, boots, and
+passes its tests; CI green across all five stacks.
+
+## Phase 10 - Remaining before shippable as a working product  (OPEN)
+
+Everything installs, builds, is tested where it can be, and CI is green. What remains
+needs hardware or an SDK not available in the build environment, so it is tracked as
+GitHub issues for a maintainer to run on their end.
+
+Blocking validation (must pass before calling it production-ready):
+- [ ] End-to-end GUI run on a real Windows desktop in real mode (#24)
+- [ ] Install and run the packaged desktop app from the Tauri installer (#25)
+- [ ] Build and test the companion APK on a physical Android device (#26)
+- [ ] Multi-monitor and high-DPI click-accuracy validation (#27)
+
+Follow-ups that strengthen the product:
+- [ ] Companion app iOS support (Info.plist permissions) (#28)
+- [ ] Backend real-mode and client-to-backend integration tests (#29)
+- [ ] Pin `@playwright/mcp` to a specific version (#30)
+- [ ] Cut `v0.1.0` and verify the release artifacts (#31)
+
+When the four blocking items pass on real hardware and `v0.1.0` is released, the project
+is shippable as a working product end to end.
+
 ---
 
 ## Execution model
